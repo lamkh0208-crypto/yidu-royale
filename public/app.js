@@ -1,0 +1,384 @@
+'use strict';
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const h = (tag, props, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (k === 'class') el.className = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (v !== false && v != null) el.setAttribute(k, v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+    return el;
+  };
+
+  // ---------- 自繪頭像（不使用任何外部圖片） ----------
+  const MOUTHS = ['M11 23 Q18 29 25 23', 'M12 25 H24', 'M11 26 Q18 20 25 26', 'M13 23 Q18 27 23 23 Q18 31 13 23', 'M12 24 Q15 21 18 24 T24 24', 'M15 22 a3 3.5 0 1 0 6 0 a3 3.5 0 1 0 -6 0'];
+  function avatar(hue, face, npc) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 36 36');
+    svg.setAttribute('class', 'av');
+    const add = (tag, attrs) => {
+      const e = document.createElementNS(ns, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      svg.append(e);
+    };
+    if (npc) {
+      add('rect', { width: 36, height: 36, rx: 10, fill: `hsl(${hue} 25% 30%)` });
+      add('path', { d: 'M8 13 L15 15 M28 13 L21 15', stroke: '#fff', 'stroke-width': 2.2, 'stroke-linecap': 'round' });
+      add('circle', { cx: 13, cy: 18, r: 1.8, fill: '#fff' });
+      add('circle', { cx: 23, cy: 18, r: 1.8, fill: '#fff' });
+      add('path', { d: 'M12 26 H24', stroke: '#fff', 'stroke-width': 2.2, 'stroke-linecap': 'round' });
+    } else {
+      add('circle', { cx: 18, cy: 18, r: 18, fill: `hsl(${hue} 70% 62%)` });
+      add('circle', { cx: 12.5, cy: 15, r: 2.2, fill: '#1b1b1b' });
+      add('circle', { cx: 23.5, cy: 15, r: 2.2, fill: '#1b1b1b' });
+      add('path', { d: MOUTHS[face % MOUTHS.length], stroke: '#1b1b1b', 'stroke-width': 2.2, fill: 'none', 'stroke-linecap': 'round' });
+    }
+    return svg;
+  }
+  const hueOf = (s) => [...s].reduce((a, c) => (a * 31 + c.codePointAt(0)) % 360, 7);
+
+  // ---------- 狀態 ----------
+  let ws = null;
+  let S = null; // 伺服器送來的最新快照
+  let deadline = 0;
+  let rendered = 0; // 已畫出的 log 筆數
+  let dockKey = '';
+  let retry = 0;
+  const store = {
+    get: (k) => { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } },
+    set: (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { /* 無痕模式 */ } },
+  };
+  const savedName = (() => { try { return localStorage.getItem('yd_name') || ''; } catch (e) { return ''; } })();
+
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => (t.hidden = true), 2200);
+  }
+
+  // ---------- 連線 ----------
+  function connect(first) {
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
+    ws.onopen = () => {
+      retry = 0;
+      ws.send(JSON.stringify(first));
+    };
+    ws.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      if (m.t === 'state') onState(m);
+      else if (m.t === 'emoji') floater(m.e);
+      else if (m.t === 'error') {
+        if (m.fatal || !S) {
+          store.set('yd_code', '');
+          S = null;
+          show('home');
+          $('homeErr').textContent = m.msg;
+          ws.onclose = null;
+          ws.close();
+        } else toast(m.msg);
+      }
+    };
+    ws.onclose = () => {
+      if (!S) return;
+      toast('連線中斷，重新連線中…');
+      setTimeout(() => connect({ t: 'join', code: S.code, name: store.get('yd_nm'), token: S.you.token }), Math.min(5000, 600 * 2 ** retry++));
+    };
+  }
+  const send = (o) => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
+
+  function show(id) {
+    $('home').hidden = id !== 'home';
+    $('game').hidden = id !== 'game';
+  }
+
+  function enter(kind) {
+    const name = $('name').value.trim();
+    const code = $('code').value.trim().toUpperCase();
+    $('homeErr').textContent = '';
+    if (!name) return ($('homeErr').textContent = '先取個暱稱');
+    if (kind === 'join' && code.length !== 4) return ($('homeErr').textContent = '房間碼是四個英文字母');
+    try { localStorage.setItem('yd_name', name); } catch (e) { /* ignore */ }
+    store.set('yd_nm', name);
+    connect(kind === 'create' ? { t: 'create', name } : { t: 'join', code, name });
+  }
+
+  // ---------- 畫面 ----------
+  const PHASE_LABEL = {
+    LOBBY: '等待開始', INTRO: '對方正在輸入…', ANSWER: '快回訊息！', VOTE: '投票：最想救哪一句？',
+    JUDGE: '判定中…', REVEAL: '公布結果', OVER: '本局結束',
+  };
+
+  function onState(m) {
+    const prev = S;
+    S = m;
+    deadline = m.remain ? Date.now() + m.remain : 0;
+    store.set('yd_code', m.code);
+    store.set('yd_token', m.you.token);
+    if (!prev) {
+      show('game');
+      history.replaceState(null, '', `?room=${m.code}`);
+    }
+    if (prev && prev.phase !== m.phase && navigator.vibrate && m.phase === 'ANSWER') navigator.vibrate(60);
+    render();
+  }
+
+  function me() {
+    return S.players.find((p) => p.id === S.you.id) || {};
+  }
+
+  function render() {
+    $('btnCode').textContent = S.code;
+    let label = PHASE_LABEL[S.phase];
+    if (S.round && S.phase !== 'OVER' && S.phase !== 'LOBBY') label = `R${S.round}｜${S.criterion ? S.criterion.name : label}`;
+    $('phaseLabel').textContent = label;
+
+    // 玩家列
+    const box = $('players');
+    box.replaceChildren(
+      ...S.players.map((p) =>
+        h('div', { class: `pl${p.id === S.you.id ? ' me' : ''}${S.round && !p.lives ? ' dead' : ''}${p.connected ? '' : ' off'}` },
+          p.host && h('span', { class: 'crown' }, '👑'),
+          p.done && h('span', { class: 'done' }, '✓'),
+          avatar(p.hue, p.face),
+          h('div', { class: 'hp' }, S.round ? (p.lives ? '♥'.repeat(p.lives) : '💀') : ''),
+          h('div', { class: 'nm' }, p.name)
+        )
+      )
+    );
+
+    // 聊天紀錄（只補新的）
+    const log = $('log');
+    if (S.log.length < rendered) {
+      log.replaceChildren();
+      rendered = 0;
+    }
+    const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+    for (; rendered < S.log.length; rendered++) log.append(renderEntry(S.log[rendered]));
+    if (stick) log.scrollTop = log.scrollHeight;
+
+    $('typing').hidden = !S.typing;
+    $('typingName').textContent = S.typing;
+    renderDock();
+    tick();
+  }
+
+  function renderEntry(e) {
+    if (e.k === 'sys') return h('div', { class: 'sys' }, e.text);
+    if (e.k === 'npc') {
+      return h('div', { class: 'msg npc' }, avatar(hueOf(e.who), 0, true),
+        h('div', { class: 'body' },
+          h('div', { class: 'who' }, e.who),
+          h('div', { class: 'bubble' }, e.target && h('span', { class: 'at' }, `@${e.target} `), e.text),
+          h('div', {}, h('span', { class: 'kw' }, `回覆必須包含「${e.keyword}」`))
+        ));
+    }
+    const mine = e.pid === S.you.id;
+    const meta = [];
+    if (e.score != null) meta.push(h('span', {}, `${e.score} 分`));
+    if (e.votes) meta.push(h('span', {}, `🛟 ${e.votes} 票`));
+    if (e.missing) meta.push(h('span', { class: 'bad' }, '沒有關鍵字'));
+    if (e.lost) meta.push(h('span', { class: 'bad' }, e.out ? '💀 出局' : '−1 條命'));
+    return h('div', { class: `msg${mine ? ' mine' : ''}${e.lost ? ' lost' : ''}` }, avatar(e.hue, e.face),
+      h('div', { class: 'body' },
+        h('div', { class: 'who' }, e.name),
+        h('div', { class: `bubble${e.ghost ? ' ghost' : ''}` }, e.ghost ? '（已讀不回）' : e.text),
+        h('div', { class: 'meta' }, meta),
+        h('div', { class: 'roast' }, h('small', {}, `${e.who} 回覆：`), e.roast)
+      ));
+  }
+
+  function renderDock() {
+    const my = me();
+    const alive = my.lives > 0;
+    const key = [S.phase, S.round, alive, S.myReply, S.myVote, my.host, S.phase === 'LOBBY' ? S.players.filter((p) => p.connected).length : 0].join('|');
+    if (key === dockKey) return;
+    dockKey = key;
+    const dock = $('dock');
+    const emojiBar = () => h('div', { class: 'emojis' }, S.emojis.map((e) => h('button', { onclick: () => send({ t: 'emoji', e }) }, e)));
+
+    if (S.phase === 'LOBBY') {
+      const n = S.players.filter((p) => p.connected).length;
+      dock.replaceChildren(h('div', { class: 'stack' },
+        h('p', { class: 'hint' }, `房間碼 `, h('b', {}, S.code), `，目前 ${n} 人（${S.minPlayers}–12 人可開始）。`,
+          S.aiEnabled ? ' AI 裁判已就緒。' : ' 未設定 AI，本局為純投票模式。'),
+        h('button', { class: 'ghost', onclick: invite }, '📎 分享邀請連結'),
+        my.host
+          ? h('button', { class: 'primary', disabled: n < S.minPlayers, onclick: () => send({ t: 'start' }) }, n < S.minPlayers ? `還差 ${S.minPlayers - n} 人` : '開始遊戲')
+          : h('p', { class: 'hint' }, '等房主按開始…')
+      ));
+    } else if (S.phase === 'ANSWER' && alive && !S.myReply) {
+      const input = h('input', { maxlength: S.replyMax, placeholder: `回覆要包含「${S.keyword}」`, autocomplete: 'off', enterkeyhint: 'send' });
+      const count = h('div', { class: 'count' });
+      const upd = () => {
+        const ok = input.value.toLowerCase().includes(S.keyword.toLowerCase());
+        count.textContent = `${ok ? '✓ 有關鍵字' : `還沒出現「${S.keyword}」`}｜${[...input.value].length}/${S.replyMax}`;
+        count.className = `count${ok ? '' : ' bad'}`;
+      };
+      const submit = () => {
+        const text = input.value.trim();
+        if (text) send({ t: 'reply', text });
+      };
+      input.addEventListener('input', upd);
+      input.addEventListener('keydown', (ev) => ev.key === 'Enter' && !ev.isComposing && submit());
+      upd();
+      dock.replaceChildren(
+        h('p', { class: 'hint' }, `本輪標準：`, h('b', {}, S.criterion.name), `（${S.criterion.desc}）`),
+        h('div', { class: 'row' }, input, h('button', { onclick: submit }, '送出')), count);
+      input.focus();
+    } else if (S.phase === 'ANSWER') {
+      dock.replaceChildren(h('p', { class: 'hint' }, alive ? `已送出：「${S.myReply}」，等其他人…` : '你是觀眾。等等可以投票救人。'), emojiBar());
+    } else if (S.phase === 'VOTE') {
+      dock.replaceChildren(
+        h('p', { class: 'hint' }, S.myVote ? '已投票，等其他人…' : h('span', {}, '匿名投票：', h('b', {}, '你最想救哪一句？'), '（不能投自己）')),
+        h('div', { class: 'ballot' }, S.ballot.map((b) =>
+          h('button', { class: `${b.mine ? 'own' : ''}${S.myVote === b.rid ? ' sel' : ''}`, disabled: b.mine || !!S.myVote,
+            onclick: () => send({ t: 'vote', rid: b.rid }) }, b.mine ? `（你的）${b.text}` : b.text))));
+    } else if (S.phase === 'OVER' && S.result) {
+      const r = S.result;
+      dock.replaceChildren(h('div', { class: 'stack result' },
+        h('h2', {}, r.winner ? `🏆 ${r.winner.name} 活到最後` : '無人生還'),
+        h('p', {}, `《${r.title}》共 ${r.rounds} 輪`),
+        h('div', { class: 'two' },
+          r.best && h('button', { class: 'ghost', onclick: shareCard }, '🖼 最神回覆卡'),
+          h('button', { class: 'ghost', onclick: invite }, '📎 邀請連結')),
+        my.host ? h('button', { class: 'primary', onclick: () => send({ t: 'again' }) }, '再來一局') : h('p', {}, '等房主按「再來一局」…')
+      ));
+    } else {
+      dock.replaceChildren(h('p', { class: 'hint' }, S.phase === 'REVEAL' ? '看看大家回了什麼 👀' : S.phase === 'JUDGE' ? '正在決定誰的回覆最該被已讀…' : '準備好，訊息要來了…'), emojiBar());
+    }
+  }
+
+  function tick() {
+    if (!S) return;
+    const left = deadline ? Math.max(0, deadline - Date.now()) : 0;
+    const clock = $('clock');
+    clock.textContent = deadline ? Math.ceil(left / 1000) : '';
+    clock.className = `clock${left < 10000 && (S.phase === 'ANSWER' || S.phase === 'VOTE') ? ' hot' : ''}`;
+    $('progress').style.width = deadline && S.total ? `${(left / S.total) * 100}%` : '0';
+  }
+  setInterval(tick, 200);
+
+  function floater(e) {
+    const el = h('span', { class: 'fl' }, e);
+    el.style.left = `${10 + Math.random() * 75}%`;
+    $('floaters').append(el);
+    setTimeout(() => el.remove(), 1900);
+  }
+
+  async function invite() {
+    const url = `${location.origin}/?room=${S.code}`;
+    try {
+      if (navigator.share) await navigator.share({ title: '已讀不回大逃殺', text: `來玩！房間碼 ${S.code}`, url });
+      else {
+        await navigator.clipboard.writeText(url);
+        toast('邀請連結已複製');
+      }
+    } catch (e) {
+      if (e && e.name !== 'AbortError') toast(`房間碼：${S.code}`);
+    }
+  }
+
+  // ---------- 直式分享卡（1080×1920，全部用 canvas 自繪） ----------
+  function wrap(ctx, text, maxW) {
+    const lines = [];
+    let line = '';
+    for (const ch of text) {
+      if (ctx.measureText(line + ch).width > maxW && line) {
+        lines.push(line);
+        line = ch;
+      } else line += ch;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function bubble(ctx, x, y, w, lines, lh, fill, color, tailLeft) {
+    const hgt = lines.length * lh + 56;
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, hgt, tailLeft ? [12, 44, 44, 44] : [44, 12, 44, 44]);
+    ctx.fill();
+    ctx.fillStyle = color;
+    lines.forEach((l, i) => ctx.fillText(l, x + 40, y + 28 + lh * (i + 0.75)));
+    return y + hgt;
+  }
+  async function shareCard() {
+    const b = S.result.best;
+    const c = document.createElement('canvas');
+    c.width = 1080;
+    c.height = 1920;
+    const ctx = c.getContext('2d');
+    const F = (px, w = 700) => `${w} ${px}px -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
+    ctx.fillStyle = '#101418';
+    ctx.fillRect(0, 0, 1080, 1920);
+    ctx.fillStyle = '#ffd23f';
+    ctx.fillRect(0, 0, 1080, 16);
+    ctx.font = F(44);
+    ctx.fillText('已讀不回大逃殺', 80, 150);
+    ctx.fillStyle = '#93a1ad';
+    ctx.font = F(36, 500);
+    ctx.fillText(`《${S.result.title}》第 ${b.round} 輪`, 80, 210);
+    ctx.fillStyle = '#eef2f5';
+    ctx.font = F(100, 900);
+    ctx.fillText('本局最神回覆', 80, 380);
+
+    let y = 500;
+    ctx.fillStyle = '#93a1ad';
+    ctx.font = F(36, 500);
+    ctx.fillText(b.who, 80, y);
+    ctx.font = F(46, 500);
+    y = bubble(ctx, 80, y + 24, 800, wrap(ctx, b.question, 720), 66, '#232b34', '#eef2f5', true) + 90;
+
+    ctx.fillStyle = '#93a1ad';
+    ctx.font = F(36, 500);
+    ctx.textAlign = 'right';
+    ctx.fillText(b.name, 1000, y);
+    ctx.textAlign = 'left';
+    ctx.font = F(60, 800);
+    const lines = wrap(ctx, b.text, 760);
+    y = bubble(ctx, 160, y + 24, 840, lines, 84, '#3d7bff', '#ffffff', false) + 100;
+
+    ctx.fillStyle = '#ffd23f';
+    ctx.fillRect(80, y, 8, 200);
+    ctx.fillStyle = '#93a1ad';
+    ctx.font = F(34, 500);
+    ctx.fillText(`${b.who} 回覆：`, 120, y + 40);
+    ctx.fillStyle = '#ffe9a3';
+    ctx.font = F(50, 700);
+    wrap(ctx, b.roast, 860).slice(0, 3).forEach((l, i) => ctx.fillText(l, 120, y + 110 + i * 68));
+
+    ctx.fillStyle = '#93a1ad';
+    ctx.font = F(36, 500);
+    if (S.result.winner) ctx.fillText(`🏆 本局生還者：${S.result.winner.name}`, 80, 1740);
+    ctx.fillText(`換你來回訊息 → ${location.host}`, 80, 1810);
+
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    const file = new File([blob], 'yidu-royale.png', { type: 'image/png' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) return await navigator.share({ files: [file], title: '已讀不回大逃殺' });
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+    const a = h('a', { href: URL.createObjectURL(blob), download: 'yidu-royale.png' });
+    a.click();
+    toast('已下載分享卡');
+  }
+  window.__card = shareCard;
+
+  // ---------- 啟動 ----------
+  $('name').value = savedName;
+  const qRoom = (new URLSearchParams(location.search).get('room') || '').toUpperCase().slice(0, 4);
+  if (qRoom) $('code').value = qRoom;
+  $('btnJoin').onclick = () => enter('join');
+  $('btnCreate').onclick = () => enter('create');
+  $('code').addEventListener('keydown', (e) => e.key === 'Enter' && enter('join'));
+  $('btnCode').onclick = invite;
+  // 重新整理後自動回到原房間
+  if (store.get('yd_token') && store.get('yd_code') && (!qRoom || qRoom === store.get('yd_code'))) {
+    connect({ t: 'join', code: store.get('yd_code'), name: store.get('yd_nm') || savedName, token: store.get('yd_token') });
+  }
+})();

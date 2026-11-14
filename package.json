@@ -1,0 +1,13 @@
+{
+  "name": "yidu-royale",
+  "version": "0.1.0",
+  "description": "已讀不回大逃殺 — 即時連線聊天室淘汰賽",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/sim.js",
+    "eval": "node test/eval.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}

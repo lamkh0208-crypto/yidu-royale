@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#101418">
+<title>已讀不回大逃殺</title>
+<meta name="description" content="3–12 人即時連線的聊天室淘汰賽。被老闆、前任、親戚訊息轟炸，誰的回覆最爛誰扣命。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="home" class="screen">
+  <div class="home-card">
+    <div class="logo" aria-hidden="true"><span class="tick">✓✓</span></div>
+    <h1>已讀不回<br>大逃殺</h1>
+    <p class="tag">老闆、前任、親戚同時敲你。<br>回得最爛的那句，扣一條命。</p>
+    <label for="name">暱稱</label>
+    <input id="name" maxlength="8" autocomplete="off" placeholder="最多 8 個字">
+    <div id="joinBox">
+      <label for="code">房間碼</label>
+      <input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="四個英文字母">
+      <button id="btnJoin" class="primary">加入房間</button>
+      <div class="or">或</div>
+    </div>
+    <button id="btnCreate" class="ghost">開一間新房間</button>
+    <p class="notice">全部角色皆為虛構。請勿輸入真實姓名、電話等個資；回覆內容可能會送交 AI 服務評分。</p>
+    <p id="homeErr" class="err" role="alert"></p>
+  </div>
+</main>
+
+<main id="game" class="screen" hidden>
+  <header>
+    <div class="bar">
+      <button id="btnCode" class="code" title="複製邀請連結"></button>
+      <div id="phaseLabel" class="phase"></div>
+      <div id="clock" class="clock"></div>
+    </div>
+    <div class="progress"><i id="progress"></i></div>
+    <div id="players" class="players"></div>
+  </header>
+  <section id="log" class="log" aria-live="polite"></section>
+  <div id="typing" class="typing" hidden><span id="typingName"></span> 正在輸入<b>.</b><b>.</b><b>.</b></div>
+  <div id="floaters" aria-hidden="true"></div>
+  <footer id="dock"></footer>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
