@@ -59,6 +59,8 @@ class Room {
     this.mode = 'vote'; // 'ai' | 'vote'
     this.current = null;
     this.nextPrompt = null;
+    this.targets = [];
+    this.ending = '';
     this.nextCriterion = null; // 亡靈投票選出的下一輪判定詞
     for (const p of this.players.values()) p.word = '';
     this.typing = '';
@@ -292,6 +294,7 @@ class Room {
       gvotes: new Map(), // 亡靈 pid -> 判定詞作者 pid
       ballot: [],
     };
+    if (target) this.targets.push(target.name);
     this.judgePromise = null;
     this.typing = prompt.character;
     this.setPhase('INTRO', T.intro, () => this.openAnswer());
@@ -415,6 +418,8 @@ class Room {
         recent: this.history.slice(-3),
         eliminated: [...this.players.values()].filter((p) => p.lives === 0 && p.played).map((p) => p.name),
         alivePlayers: this.alive.map((p) => p.name),
+        lives: Object.fromEntries(this.alive.map((p) => [p.name, p.lives])),
+        recentTargets: this.targets.slice(-2),
         current: { character: c.character, message: c.message, keyword: c.keyword },
         replies: c.ballot.map((b) => ({ id: b.rid, player: this.players.get(b.pid).name, text: b.text })),
       };
@@ -526,10 +531,11 @@ class Room {
       replies: entries.map((e) => ({ player: this.players.get(e.pid).name, text: e.text })),
     });
     if (aiOK) this.facts = this.facts.concat(verdict.facts).slice(-15);
+    if (aiOK && verdict.ending) this.ending = verdict.ending;
     this.nextPrompt = aiOK && verdict.next ? verdict.next : this.fallbackPrompt(this.round);
 
     const over = this.alive.length <= 1 || this.round >= MAX_ROUNDS;
-    const ms = T.reveal || Math.min(16000, 5000 + 1100 * c.aliveIds.length);
+    const ms = T.reveal || Math.min(17000, 5500 + 1000 * c.aliveIds.length);
     this.setPhase('REVEAL', ms, () => (over ? this.finish() : this.beginRound(this.nextPrompt)));
     this.broadcast();
   }
@@ -540,6 +546,10 @@ class Room {
       .sort((a, b) => b.lives - a.lives || b.total - a.total)
       .map((p) => ({ id: p.id, name: p.name, hue: p.hue, face: p.face, lives: p.lives }));
     this.result = { winner: ranking[0] || null, ranking, best: this.best, title: this.scenario.title, rounds: this.round };
+    // 結局：揭曉角色祕密。AI 有寫就用 AI 的，否則用劇本設定組出來。
+    const ending = this.ending
+      || this.scenario.characters.filter((c) => c.secret).map((c) => `${c.name}：${c.secret}`).join('；');
+    if (ending) this.sys(`🎬 結局揭曉｜${ending}`);
     if (ranking[0]) this.sys(`🏆 ${ranking[0].name} 活到最後！`);
     this.current = null;
     this.setPhase('OVER', 0);

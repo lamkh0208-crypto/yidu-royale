@@ -11,6 +11,8 @@
     for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
     return el;
   };
+  // replaceChildren 會把 null 印成文字，所以先濾掉。
+  const fill = (el, ...kids) => el.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
 
   // ---------- 自繪頭像（不使用任何外部圖片） ----------
   const MOUTHS = ['M11 23 Q18 29 25 23', 'M12 25 H24', 'M11 26 Q18 20 25 26', 'M13 23 Q18 27 23 23 Q18 31 13 23', 'M12 24 Q15 21 18 24 T24 24', 'M15 22 a3 3.5 0 1 0 6 0 a3 3.5 0 1 0 -6 0'];
@@ -46,6 +48,11 @@
   let deadline = 0;
   let rendered = 0; // 已畫出的 log 筆數
   let dockKey = '';
+  let queue = []; // 等待逐則公布的聊天紀錄
+  let qTimer = null;
+  let firstSync = true;
+  let lastTick = 0;
+  const shownLives = {};
   let retry = 0;
   const store = {
     get: (k) => { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } },
@@ -71,7 +78,7 @@
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       if (m.t === 'state') onState(m);
-      else if (m.t === 'emoji') floater(m.e);
+      else if (m.t === 'emoji') { floater(m.e); Sound.play('emoji'); }
       else if (m.t === 'error') {
         if (m.fatal || !S) {
           store.set('yd_code', '');
@@ -104,6 +111,7 @@
     if (kind === 'join' && code.length !== 4) return ($('homeErr').textContent = '房間碼是四個英文字母');
     try { localStorage.setItem('yd_name', name); } catch (e) { /* ignore */ }
     store.set('yd_nm', name);
+    Sound.init();
     connect(kind === 'create' ? { t: 'create', name } : { t: 'join', code, name });
   }
 
@@ -123,8 +131,15 @@
       show('game');
       history.replaceState(null, '', `?room=${m.code}`);
     }
-    if (prev && prev.phase !== m.phase && navigator.vibrate && m.phase === 'ANSWER') navigator.vibrate(60);
+    if (!prev) firstSync = true;
+    if (!prev || prev.phase !== m.phase) {
+      Sound.setMood(m.phase === 'LOBBY' || m.phase === 'OVER' ? 'lobby' : m.phase === 'ANSWER' ? 'tense' : 'idle');
+      if (prev && m.phase === 'ANSWER' && navigator.vibrate) navigator.vibrate(60);
+      if (prev && prev.phase === 'LOBBY' && m.phase === 'INTRO') Sound.play('start');
+      if (prev && m.phase === 'VOTE') Sound.play('pop');
+    }
     render();
+    firstSync = false;
   }
 
   function me() {
@@ -137,34 +152,85 @@
     if (S.round && S.phase !== 'OVER' && S.phase !== 'LOBBY') label = `R${S.round}｜${S.criterion ? S.criterion.name : label}`;
     $('phaseLabel').textContent = label;
 
-    // 玩家列
-    const box = $('players');
-    box.replaceChildren(
-      ...S.players.map((p) =>
-        h('div', { class: `pl${p.id === S.you.id ? ' me' : ''}${S.round && !p.lives ? ' dead' : ''}${p.connected ? '' : ' off'}` },
-          p.host && h('span', { class: 'crown' }, '👑'),
-          p.done && h('span', { class: 'done' }, '✓'),
-          avatar(p.hue, p.face),
-          h('div', { class: 'hp' }, S.round ? (p.lives ? '♥'.repeat(p.lives) : '💀') : ''),
-          h('div', { class: 'nm' }, p.name)
-        )
-      )
-    );
+    renderPlayers();
+    $('rules').hidden = !(S.phase === 'LOBBY' && !S.log.length);
 
     // 聊天紀錄（只補新的）
     const log = $('log');
     if (S.log.length < rendered) {
       log.replaceChildren();
       rendered = 0;
+      queue = [];
+      clearTimeout(qTimer);
+      qTimer = null;
     }
-    const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
-    for (; rendered < S.log.length; rendered++) log.append(renderEntry(S.log[rendered]));
-    if (stick) log.scrollTop = log.scrollHeight;
+    for (; rendered < S.log.length; rendered++) {
+      if (firstSync) appendEntry(S.log[rendered], true);
+      else queue.push(S.log[rendered]);
+    }
+    if (firstSync) log.scrollTop = log.scrollHeight;
+    else if (!qTimer) pump();
+    // 已讀人數：作答中即時更新在最後一則角色訊息下面
+    if (S.phase === 'ANSWER') {
+      const reads = log.querySelectorAll('.read');
+      const n = S.players.filter((p) => p.done).length;
+      if (reads.length) reads[reads.length - 1].textContent = n ? `已讀 ${n}` : '';
+    }
 
     $('typing').hidden = !S.typing;
     $('typingName').textContent = S.typing;
     renderDock();
     tick();
+  }
+
+  // 公布結果時一則一則跳出來，扣命的心也跟著掉，比較有戲。
+  function pump() {
+    qTimer = null;
+    while (queue.length) {
+      const e = queue.shift();
+      appendEntry(e, false);
+      const next = queue[0];
+      if (next && next.k === 'reply') {
+        qTimer = setTimeout(pump, S.phase === 'REVEAL' ? 850 : 120);
+        break;
+      }
+    }
+    renderPlayers();
+  }
+
+  function appendEntry(e, silent) {
+    const log = $('log');
+    const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 160;
+    const el = renderEntry(e);
+    log.append(el);
+    if (stick || e.pid === S.you.id) log.scrollTop = log.scrollHeight;
+    if (silent) return;
+    if (e.k === 'npc') Sound.play('msg');
+    else if (e.k === 'reply') {
+      Sound.play(e.out ? 'out' : e.lost ? 'lost' : 'pop');
+      if (e.lost && e.pid === S.you.id && navigator.vibrate) navigator.vibrate([80, 60, 80]);
+    } else if (e.k === 'sys') {
+      if (e.text.startsWith('🏆')) Sound.play('win');
+      else if (e.text.startsWith('👻')) Sound.play('ghost');
+    }
+  }
+
+  function renderPlayers() {
+    const pending = {};
+    for (const e of queue) if (e.k === 'reply' && e.lost) pending[e.pid] = (pending[e.pid] || 0) + 1;
+    $('players').replaceChildren(
+      ...S.players.map((p) => {
+        const lives = p.lives + (pending[p.id] || 0);
+        const hurt = shownLives[p.id] != null && lives < shownLives[p.id];
+        shownLives[p.id] = lives;
+        return h('div', { class: `pl${p.id === S.you.id ? ' me' : ''}${S.round && !lives ? ' dead' : ''}${p.connected ? '' : ' off'}${hurt ? ' hurt' : ''}` },
+          p.host && h('span', { class: 'crown' }, '👑'),
+          p.done && h('span', { class: 'done' }, '✓'),
+          avatar(p.hue, p.face),
+          h('div', { class: 'hp' }, S.round ? (lives ? '♥'.repeat(lives) : '💀') : ''),
+          h('div', { class: 'nm' }, p.name));
+      })
+    );
   }
 
   function renderEntry(e) {
@@ -174,7 +240,7 @@
         h('div', { class: 'body' },
           h('div', { class: 'who' }, e.who),
           h('div', { class: 'bubble' }, e.target && h('span', { class: 'at' }, `@${e.target} `), e.text),
-          h('div', {}, h('span', { class: 'kw' }, `回覆必須包含「${e.keyword}」`))
+          h('div', {}, h('span', { class: 'kw' }, `回覆必須包含「${e.keyword}」`), h('span', { class: 'read' }))
         ));
     }
     const mine = e.pid === S.you.id;
@@ -183,7 +249,7 @@
     if (e.votes) meta.push(h('span', {}, `🛟 ${e.votes} 票`));
     if (e.missing) meta.push(h('span', { class: 'bad' }, '沒有關鍵字'));
     if (e.lost) meta.push(h('span', { class: 'bad' }, e.out ? '💀 出局' : '−1 條命'));
-    return h('div', { class: `msg${mine ? ' mine' : ''}${e.lost ? ' lost' : ''}` }, avatar(e.hue, e.face),
+    return h('div', { class: `msg reveal${mine ? ' mine' : ''}${e.lost ? ' lost' : ''}` }, avatar(e.hue, e.face),
       h('div', { class: 'body' },
         h('div', { class: 'who' }, e.name),
         h('div', { class: `bubble${e.ghost ? ' ghost' : ''}` }, e.ghost ? '（已讀不回）' : e.text),
@@ -211,23 +277,23 @@
       if (old) input.value = old.value;
       const submit = () => {
         const text = input.value.trim();
-        if (text) { send({ t: 'word', text }); input.value = ''; }
+        if (text) { send({ t: 'word', text }); input.value = ''; Sound.play('ghost'); }
       };
       input.addEventListener('keydown', (ev) => ev.key === 'Enter' && !ev.isComposing && submit());
       return h('div', { class: 'stack ghostbox' },
-        h('p', { class: 'hint' }, '👻 你是亡靈：', h('b', {}, '寫一個判定詞'), '，亡靈們投票，最高票的詞就是下一輪的扣命標準。'),
+        h('p', { class: 'hint' }, g.myWord ? '👻 亡靈投票：最高票的判定詞就是下一輪的扣命標準。' : h('span', {}, '👻 你是亡靈：', h('b', {}, '寫一個判定詞'), '，亡靈們投票，最高票的詞就是下一輪的扣命標準。')),
         h('div', { class: 'row' }, input, h('button', { onclick: submit }, g.myWord ? '改' : '寫好了')),
         g.words.length ? h('div', { class: 'ballot' }, g.words.map((w) => {
           const blocked = w.mine && !g.solo;
           return h('button', { class: `${blocked ? 'own' : ''}${g.myVote === w.pid ? ' sel' : ''}`, disabled: !g.canVote || blocked,
-            onclick: () => send({ t: 'gvote', pid: w.pid }) }, `「${w.text}」— ${w.name}${w.mine ? '（你）' : ''}　${w.votes} 票`);
+            onclick: () => { send({ t: 'gvote', pid: w.pid }); Sound.play('vote'); } }, `「${w.text}」— ${w.name}${w.mine ? '（你）' : ''}　${w.votes} 票`);
         })) : null,
         g.words.length && !g.canVote ? h('p', { class: 'hint' }, '下一題出現、活人作答時開放投票。') : null);
     };
 
     if (S.phase === 'LOBBY') {
       const n = S.players.filter((p) => p.connected).length;
-      dock.replaceChildren(h('div', { class: 'stack' },
+      fill(dock, h('div', { class: 'stack' },
         h('p', { class: 'hint' }, `房間碼 `, h('b', {}, S.code), `，目前 ${n} 人（${S.minPlayers}–12 人可開始）。`,
           S.aiEnabled ? ' AI 裁判已就緒。' : ' 未設定 AI，本局為純投票模式。'),
         h('button', { class: 'ghost', onclick: invite }, '📎 分享邀請連結'),
@@ -245,35 +311,36 @@
       };
       const submit = () => {
         const text = input.value.trim();
-        if (text) send({ t: 'reply', text });
+        if (text) { send({ t: 'reply', text }); Sound.play('send'); }
       };
       input.addEventListener('input', upd);
       input.addEventListener('keydown', (ev) => ev.key === 'Enter' && !ev.isComposing && submit());
       upd();
-      dock.replaceChildren(
+      fill(dock, 
         h('p', { class: 'hint' }, `本輪標準：`, h('b', {}, S.criterion.name), `（${S.criterion.desc}）`),
         h('div', { class: 'row' }, input, h('button', { onclick: submit }, '送出')), count);
       input.focus();
     } else if (S.phase === 'ANSWER') {
-      dock.replaceChildren(h('p', { class: 'hint' }, alive ? `已送出：「${S.myReply}」，等其他人…` : '活人作答中。等等可以投票救人。'), ghostPanel(), emojiBar());
+      fill(dock, h('p', { class: 'hint' }, alive ? `已送出：「${S.myReply}」，等其他人…` : '活人作答中。等等可以投票救人。'), ghostPanel(), emojiBar());
     } else if (S.phase === 'VOTE') {
-      dock.replaceChildren(
+      fill(dock, 
         h('p', { class: 'hint' }, S.myVote ? '已投票，等其他人…' : h('span', {}, '匿名投票：', h('b', {}, '你最想救哪一句？'), '（不能投自己）')),
         h('div', { class: 'ballot' }, S.ballot.map((b) =>
           h('button', { class: `${b.mine ? 'own' : ''}${S.myVote === b.rid ? ' sel' : ''}`, disabled: b.mine || !!S.myVote,
-            onclick: () => send({ t: 'vote', rid: b.rid }) }, b.mine ? `（你的）${b.text}` : b.text))));
+            onclick: () => { send({ t: 'vote', rid: b.rid }); Sound.play('vote'); } }, b.mine ? `（你的）${b.text}` : b.text))));
     } else if (S.phase === 'OVER' && S.result) {
       const r = S.result;
-      dock.replaceChildren(h('div', { class: 'stack result' },
+      fill(dock, h('div', { class: 'stack result' },
         h('h2', {}, r.winner ? `🏆 ${r.winner.name} 活到最後` : '無人生還'),
         h('p', {}, `《${r.title}》共 ${r.rounds} 輪`),
+        h('div', { class: 'rank' }, r.ranking.slice(0, 6).map((x, i) => h('span', { class: x.id === S.you.id ? 'me' : '' }, `${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${x.name}${x.lives ? ' ' + '♥'.repeat(x.lives) : ''}`))),
         h('div', { class: 'two' },
           r.best && h('button', { class: 'ghost', onclick: shareCard }, '🖼 最神回覆卡'),
           h('button', { class: 'ghost', onclick: invite }, '📎 邀請連結')),
         my.host ? h('button', { class: 'primary', onclick: () => send({ t: 'again' }) }, '再來一局') : h('p', {}, '等房主按「再來一局」…')
       ));
     } else {
-      dock.replaceChildren(h('p', { class: 'hint' }, S.phase === 'REVEAL' ? '看看大家回了什麼 👀' : S.phase === 'JUDGE' ? '正在決定誰的回覆最該被已讀…' : '準備好，訊息要來了…'), ghostPanel(), emojiBar());
+      fill(dock, h('p', { class: 'hint' }, S.phase === 'REVEAL' ? '看看大家回了什麼 👀' : S.phase === 'JUDGE' ? '正在決定誰的回覆最該被已讀…' : '準備好，訊息要來了…'), ghostPanel(), emojiBar());
     }
   }
 
@@ -284,6 +351,14 @@
     clock.textContent = deadline ? Math.ceil(left / 1000) : '';
     clock.className = `clock${left < 10000 && (S.phase === 'ANSWER' || S.phase === 'VOTE') ? ' hot' : ''}`;
     $('progress').style.width = deadline && S.total ? `${(left / S.total) * 100}%` : '0';
+    const timed = S.phase === 'ANSWER' || S.phase === 'VOTE';
+    const sec = Math.ceil(left / 1000);
+    if (timed && deadline && sec <= 5 && sec > 0 && sec !== lastTick) {
+      lastTick = sec;
+      const my = me();
+      if (S.phase === 'VOTE' ? !S.myVote : my.lives > 0 && !S.myReply) Sound.play('tick');
+    }
+    if (S.phase === 'ANSWER') Sound.setMood(left < 10000 ? 'panic' : 'tense');
   }
   setInterval(tick, 200);
 
@@ -401,6 +476,15 @@
   $('btnCreate').onclick = () => enter('create');
   $('code').addEventListener('keydown', (e) => e.key === 'Enter' && enter('join'));
   $('btnCode').onclick = invite;
+  const SND = ['🔊', '🔔', '🔇'];
+  $('btnSound').textContent = SND[Sound.mode];
+  $('btnSound').onclick = () => {
+    const m = Sound.cycle();
+    $('btnSound').textContent = SND[m];
+    toast(['音樂＋音效', '只有音效', '靜音'][m]);
+  };
+  // 重新整理後自動回房時還沒有點擊過，第一次觸碰畫面再啟動聲音
+  document.addEventListener('pointerdown', () => Sound.init(), { once: true });
   // 重新整理後自動回到原房間
   if (store.get('yd_token') && store.get('yd_code') && (!qRoom || qRoom === store.get('yd_code'))) {
     connect({ t: 'join', code: store.get('yd_code'), name: store.get('yd_nm') || savedName, token: store.get('yd_token') });
