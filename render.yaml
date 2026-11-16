@@ -1,0 +1,19 @@
+# Render Blueprint：在 Render 選 New → Blueprint，指到這個 repo 即可建立服務。
+services:
+  - type: web
+    name: yidu-royale
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    numInstances: 1 # 房間存在記憶體，只能開一台
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: AI_PROVIDERS
+        value: gemini,deepseek
+      - key: GEMINI_API_KEY
+        sync: false # 部署時在 Render 介面填入，不會進 repo
+      - key: DEEPSEEK_API_KEY
+        sync: false
