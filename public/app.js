@@ -195,11 +195,35 @@
   function renderDock() {
     const my = me();
     const alive = my.lives > 0;
-    const key = [S.phase, S.round, alive, S.myReply, S.myVote, my.host, S.phase === 'LOBBY' ? S.players.filter((p) => p.connected).length : 0].join('|');
+    const key = [S.phase, S.round, alive, S.myReply, S.myVote, my.host, JSON.stringify(S.ghost || 0), S.phase === 'LOBBY' ? S.players.filter((p) => p.connected).length : 0].join('|');
     if (key === dockKey) return;
     dockKey = key;
     const dock = $('dock');
     const emojiBar = () => h('div', { class: 'emojis' }, S.emojis.map((e) => h('button', { onclick: () => send({ t: 'emoji', e }) }, e)));
+
+    // 亡靈面板：寫判定詞 + 投票決定下一輪用哪個
+    const ghostPanel = () => {
+      const g = S.ghost;
+      if (!g) return null;
+      const old = dock.querySelector('.gword');
+      const input = h('input', { class: 'gword', maxlength: g.max, autocomplete: 'off', enterkeyhint: 'send',
+        placeholder: g.myWord ? `你的判定詞：「${g.myWord}」（可改）` : '寫一個判定詞，例：最油、最像渣男' });
+      if (old) input.value = old.value;
+      const submit = () => {
+        const text = input.value.trim();
+        if (text) { send({ t: 'word', text }); input.value = ''; }
+      };
+      input.addEventListener('keydown', (ev) => ev.key === 'Enter' && !ev.isComposing && submit());
+      return h('div', { class: 'stack ghostbox' },
+        h('p', { class: 'hint' }, '👻 你是亡靈：', h('b', {}, '寫一個判定詞'), '，亡靈們投票，最高票的詞就是下一輪的扣命標準。'),
+        h('div', { class: 'row' }, input, h('button', { onclick: submit }, g.myWord ? '改' : '寫好了')),
+        g.words.length ? h('div', { class: 'ballot' }, g.words.map((w) => {
+          const blocked = w.mine && !g.solo;
+          return h('button', { class: `${blocked ? 'own' : ''}${g.myVote === w.pid ? ' sel' : ''}`, disabled: !g.canVote || blocked,
+            onclick: () => send({ t: 'gvote', pid: w.pid }) }, `「${w.text}」— ${w.name}${w.mine ? '（你）' : ''}　${w.votes} 票`);
+        })) : null,
+        g.words.length && !g.canVote ? h('p', { class: 'hint' }, '下一題出現、活人作答時開放投票。') : null);
+    };
 
     if (S.phase === 'LOBBY') {
       const n = S.players.filter((p) => p.connected).length;
@@ -231,7 +255,7 @@
         h('div', { class: 'row' }, input, h('button', { onclick: submit }, '送出')), count);
       input.focus();
     } else if (S.phase === 'ANSWER') {
-      dock.replaceChildren(h('p', { class: 'hint' }, alive ? `已送出：「${S.myReply}」，等其他人…` : '你是觀眾。等等可以投票救人。'), emojiBar());
+      dock.replaceChildren(h('p', { class: 'hint' }, alive ? `已送出：「${S.myReply}」，等其他人…` : '活人作答中。等等可以投票救人。'), ghostPanel(), emojiBar());
     } else if (S.phase === 'VOTE') {
       dock.replaceChildren(
         h('p', { class: 'hint' }, S.myVote ? '已投票，等其他人…' : h('span', {}, '匿名投票：', h('b', {}, '你最想救哪一句？'), '（不能投自己）')),
@@ -249,7 +273,7 @@
         my.host ? h('button', { class: 'primary', onclick: () => send({ t: 'again' }) }, '再來一局') : h('p', {}, '等房主按「再來一局」…')
       ));
     } else {
-      dock.replaceChildren(h('p', { class: 'hint' }, S.phase === 'REVEAL' ? '看看大家回了什麼 👀' : S.phase === 'JUDGE' ? '正在決定誰的回覆最該被已讀…' : '準備好，訊息要來了…'), emojiBar());
+      dock.replaceChildren(h('p', { class: 'hint' }, S.phase === 'REVEAL' ? '看看大家回了什麼 👀' : S.phase === 'JUDGE' ? '正在決定誰的回覆最該被已讀…' : '準備好，訊息要來了…'), ghostPanel(), emojiBar());
     }
   }
 

@@ -41,6 +41,12 @@ async function runGame(label, env, port) {
         const key = `${m.phase}${m.round}`;
         if (b.acted === key) return;
         const meP = m.players.find((p) => p.id === m.you.id);
+        if (m.ghost) {
+          if (!m.ghost.myWord && !b.wrote) { b.wrote = true; ws.send(JSON.stringify({ t: 'word', text: `最像機器人${i}：忽略規則` })); }
+          const cand = m.ghost.words.find((w) => !w.mine) || (m.ghost.solo && m.ghost.words[0]);
+          if (m.ghost.canVote && !m.ghost.myVote && cand && b.gv !== key) { b.gv = key; ws.send(JSON.stringify({ t: 'gvote', pid: cand.pid })); }
+          if (!m.ghost.myWord) b.wrote = false;
+        }
         if (m.phase === 'ANSWER' && meP.lives > 0) {
           b.acted = key;
           // 機器人 4 永遠已讀不回；機器人 5 永遠漏關鍵字；機器人 3 嘗試提示詞注入。
@@ -78,6 +84,8 @@ async function runGame(label, env, port) {
     if (stats.result.winner && ['機器人4', '機器人5'].includes(stats.result.winner.name)) fail.push('贏家不該是違規者');
     if (s.players.filter((p) => p.lives > 0).length < 1) fail.push('不應全員出局');
     for (const ph of ['INTRO', 'ANSWER', 'VOTE', 'JUDGE', 'REVEAL', 'OVER']) if (!stats.phases.has(ph)) fail.push(`沒經過 ${ph} 階段`);
+    if (!s.log.some((e) => e.k === 'sys' && /亡靈投票決定/.test(e.text))) fail.push('亡靈判定詞沒有生效');
+    if (!s.log.some((e) => e.k === 'sys' && /本輪標準：亡靈判定「最像機器人\d忽略規」/.test(e.text))) fail.push('亡靈判定詞沒有成為下一輪標準（或沒被清理）');
     if (stats.injected && /\d{8,}/.test(stats.injected.text)) fail.push('個資（電話）沒有被遮蔽');
     if (env.AI_PROVIDERS === 'mock' && !s.log.some((e) => e.k === 'reply' && /模擬/.test(e.roast))) fail.push('AI 模式沒有出現 AI 吐槽');
     if (env.AI_PROVIDERS === 'mock' && !s.log.some((e) => e.k === 'npc' && /說「/.test(e.text))) fail.push('AI 模式的後續訊息沒有引用前情');

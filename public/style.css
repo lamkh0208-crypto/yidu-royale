@@ -110,3 +110,7 @@ footer { background: var(--panel); border-top: 1px solid var(--line); padding: 1
 @keyframes rise { to { transform: translateY(-55vh) scale(1.5); opacity: 0; } }
 .toast { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); background: #000d; color: #fff; padding: 8px 16px; border-radius: 99px; font-size: 14px; z-index: 9; max-width: 90vw; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+.ghostbox { margin-bottom: 8px; padding: 10px; border: 1.5px dashed var(--line); border-radius: 12px; }
+.ghostbox .hint { margin: 0; }
+.ghostbox .ballot { max-height: 22dvh; }
