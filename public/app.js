@@ -40,6 +40,40 @@
     }
     return svg;
   }
+  // 出題角色的表情：0 開心、1 滿意、2 無言、3 不爽、4 暴怒
+  const MOOD_LABEL = ['😊 開心', '🙂 滿意', '😐 無言', '😒 不爽', '🤬 暴怒'];
+  const MOOD_DELTA = [-12, -5, 3, 10, 18];
+  function npcFace(hue, mood) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 64 64');
+    const add = (tag, attrs) => {
+      const e = document.createElementNS(ns, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      svg.append(e);
+      return e;
+    };
+    const bg = ['hsl(' + hue + ' 45% 44%)', 'hsl(' + hue + ' 30% 36%)', 'hsl(' + hue + ' 15% 32%)', 'hsl(18 55% 38%)', 'hsl(0 78% 44%)'][mood];
+    add('rect', { width: 64, height: 64, rx: 18, fill: bg });
+    const line = { stroke: '#fff', 'stroke-width': 4, 'stroke-linecap': 'round', fill: 'none' };
+    const brows = ['M13 20 Q20 14 27 20 M37 20 Q44 14 51 20', 'M14 19 H26 M38 19 H50', 'M14 22 H26 M38 22 H50', 'M13 17 L27 23 M51 17 L37 23', 'M12 13 L28 24 M52 13 L36 24'][mood];
+    add('path', { d: brows, ...line });
+    if (mood === 2) add('path', { d: 'M17 31 H25 M39 31 H47', ...line });
+    else {
+      add('circle', { cx: 21, cy: 31, r: mood === 4 ? 4 : 3.4, fill: '#fff' });
+      add('circle', { cx: 43, cy: 31, r: mood === 4 ? 4 : 3.4, fill: '#fff' });
+    }
+    if (mood === 4) {
+      add('ellipse', { cx: 32, cy: 48, rx: 11, ry: 7, fill: '#2a0505', stroke: '#fff', 'stroke-width': 3 });
+      add('path', { d: 'M23 45 H41', stroke: '#fff', 'stroke-width': 3 });
+      add('path', { d: 'M50 6 l5 5 M55 6 l-5 5 M47 9 h11 M52.5 3 v11', stroke: '#ffd23f', 'stroke-width': 2.4, 'stroke-linecap': 'round' });
+    } else {
+      const mouth = ['M19 43 Q32 57 45 43', 'M22 46 Q32 52 42 46', 'M23 48 H41', 'M21 51 Q32 41 43 51'][mood];
+      add('path', { d: mouth, ...line });
+    }
+    return svg;
+  }
+  const moodOfAnger = (a) => (a < 30 ? 1 : a < 55 ? 2 : a < 80 ? 3 : 4);
   const hueOf = (s) => [...s].reduce((a, c) => (a * 31 + c.codePointAt(0)) % 360, 7);
 
   // ---------- 狀態 ----------
@@ -53,6 +87,10 @@
   let firstSync = true;
   let lastTick = 0;
   const shownLives = {};
+  let shownAnger = 20;
+  let stageMood = -1;
+  let stageWho = '';
+  let topicDraft = '';
   let retry = 0;
   const store = {
     get: (k) => { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } },
@@ -177,10 +215,39 @@
       if (reads.length) reads[reads.length - 1].textContent = n ? `已讀 ${n}` : '';
     }
 
+    if (!queue.length && !qTimer) syncStage();
+    $('stage').hidden = !(S.round && S.npc && S.phase !== 'LOBBY' && S.phase !== 'OVER');
+    $('stage').classList.toggle('reading', S.phase === 'JUDGE');
     $('typing').hidden = !S.typing;
     $('typingName').textContent = S.typing;
     renderDock();
     tick();
+  }
+
+  // 舞台：出題角色的大頭、表情與怒氣值
+  function setStage(who, mood, anger, hit) {
+    const st = $('stage');
+    if (who !== stageWho || mood !== stageMood) {
+      $('stageFace').replaceChildren(npcFace(hueOf(who), mood));
+      $('stageName').textContent = who;
+      $('stageMood').textContent = MOOD_LABEL[mood];
+      st.className = `stage m${mood}${st.classList.contains('reading') ? ' reading' : ''}`;
+    }
+    stageWho = who;
+    stageMood = mood;
+    shownAnger = Math.max(0, Math.min(100, anger));
+    $('angerBar').style.width = `${shownAnger}%`;
+    $('angerNum').textContent = `怒氣 ${Math.round(shownAnger)}`;
+    if (hit) {
+      st.classList.remove('hit');
+      void st.offsetWidth; // 重新觸發動畫
+      st.classList.add('hit');
+    }
+    Sound.setEmotion(shownAnger < 30 ? 0 : shownAnger < 55 ? 1 : shownAnger < 80 ? 2 : 3);
+  }
+  function syncStage() {
+    if (S.npc) setStage(S.npc, moodOfAnger(S.anger), S.anger, false);
+    else if (S.phase === 'LOBBY' || S.phase === 'OVER') Sound.setEmotion(0);
   }
 
   // 公布結果時一則一則跳出來，扣命的心也跟著掉，比較有戲。
@@ -191,11 +258,12 @@
       appendEntry(e, false);
       const next = queue[0];
       if (next && next.k === 'reply') {
-        qTimer = setTimeout(pump, S.phase === 'REVEAL' ? 850 : 120);
+        qTimer = setTimeout(pump, S.phase === 'REVEAL' ? 1300 : 120);
         break;
       }
     }
     renderPlayers();
+    if (!queue.length && !qTimer) setTimeout(() => !queue.length && !qTimer && syncStage(), 1200);
   }
 
   function appendEntry(e, silent) {
@@ -207,6 +275,9 @@
     if (silent) return;
     if (e.k === 'npc') Sound.play('msg');
     else if (e.k === 'reply') {
+      // 角色讀到這句回覆：換表情、怒氣值跟著跳
+      if (e.mood != null) setStage(e.who, e.mood, shownAnger + MOOD_DELTA[e.mood], true);
+      if (e.mood === 4) Sound.play('rage'); else if (e.mood === 0) Sound.play('happy');
       Sound.play(e.out ? 'out' : e.lost ? 'lost' : 'pop');
       if (e.lost && e.pid === S.you.id && navigator.vibrate) navigator.vibrate([80, 60, 80]);
     } else if (e.k === 'sys') {
@@ -245,6 +316,7 @@
     }
     const mine = e.pid === S.you.id;
     const meta = [];
+    if (e.mood != null) meta.push(h('span', {}, MOOD_LABEL[e.mood]));
     if (e.score != null) meta.push(h('span', {}, `${e.score} 分`));
     if (e.votes) meta.push(h('span', {}, `🛟 ${e.votes} 票`));
     if (e.missing) meta.push(h('span', { class: 'bad' }, '沒有關鍵字'));
@@ -297,8 +369,14 @@
         h('p', { class: 'hint' }, `房間碼 `, h('b', {}, S.code), `，目前 ${n} 人（${S.minPlayers}–12 人可開始）。`,
           S.aiEnabled ? ' AI 裁判已就緒。' : ' 未設定 AI，本局為純投票模式。'),
         h('button', { class: 'ghost', onclick: invite }, '📎 分享邀請連結'),
+        my.host && S.aiEnabled && (() => {
+          const inp = h('input', { maxlength: 30, autocomplete: 'off', placeholder: '本局主題（選填）例：演唱會搶票、颱風假放不放' });
+          inp.value = topicDraft;
+          inp.addEventListener('input', () => (topicDraft = inp.value));
+          return inp;
+        })(),
         my.host
-          ? h('button', { class: 'primary', disabled: n < S.minPlayers, onclick: () => send({ t: 'start' }) }, n < S.minPlayers ? `還差 ${S.minPlayers - n} 人` : '開始遊戲')
+          ? h('button', { class: 'primary', disabled: n < S.minPlayers, onclick: () => send({ t: 'start', topic: topicDraft }) }, n < S.minPlayers ? `還差 ${S.minPlayers - n} 人` : '開始遊戲')
           : h('p', { class: 'hint' }, '等房主按開始…')
       ));
     } else if (S.phase === 'ANSWER' && alive && !S.myReply) {
@@ -340,7 +418,7 @@
         my.host ? h('button', { class: 'primary', onclick: () => send({ t: 'again' }) }, '再來一局') : h('p', {}, '等房主按「再來一局」…')
       ));
     } else {
-      fill(dock, h('p', { class: 'hint' }, S.phase === 'REVEAL' ? '看看大家回了什麼 👀' : S.phase === 'JUDGE' ? '正在決定誰的回覆最該被已讀…' : '準備好，訊息要來了…'), ghostPanel(), emojiBar());
+      fill(dock, h('p', { class: 'hint' }, S.phase === 'REVEAL' ? '看看大家回了什麼 👀' : S.phase === 'JUDGE' ? `${S.npc || '對方'} 正在已讀大家的回覆…` : '準備好，訊息要來了…'), ghostPanel(), emojiBar());
     }
   }
 

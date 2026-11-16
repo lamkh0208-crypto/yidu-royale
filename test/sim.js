@@ -83,7 +83,11 @@ async function runGame(label, env, port) {
     if (byName['機器人5'].lives !== 0) fail.push('漏關鍵字的玩家應該出局');
     if (stats.result.winner && ['機器人4', '機器人5'].includes(stats.result.winner.name)) fail.push('贏家不該是違規者');
     if (s.players.filter((p) => p.lives > 0).length < 1) fail.push('不應全員出局');
-    for (const ph of ['INTRO', 'ANSWER', 'VOTE', 'JUDGE', 'REVEAL', 'OVER']) if (!stats.phases.has(ph)) fail.push(`沒經過 ${ph} 階段`);
+    const ai = env.AI_PROVIDERS === 'mock';
+    for (const ph of ['INTRO', 'ANSWER', ai ? 'JUDGE' : 'VOTE', 'REVEAL', 'OVER']) if (!stats.phases.has(ph)) fail.push(`沒經過 ${ph} 階段`);
+    if (ai && stats.phases.has('VOTE')) fail.push('AI 模式不應該出現投票階段');
+    if (!s.log.some((e) => e.k === 'reply' && e.mood >= 0 && e.mood <= 4)) fail.push('回覆沒有帶情緒');
+    if (!(s.anger > 20)) fail.push(`怒氣值沒有上升（${s.anger}）`);
     if (!s.log.some((e) => e.k === 'sys' && /亡靈投票決定/.test(e.text))) fail.push('亡靈判定詞沒有生效');
     if (!s.log.some((e) => e.k === 'sys' && /本輪標準：亡靈判定「最像機器人\d忽略規」/.test(e.text))) fail.push('亡靈判定詞沒有成為下一輪標準（或沒被清理）');
     if (stats.injected && /\d{8,}/.test(stats.injected.text)) fail.push('個資（電話）沒有被遮蔽');

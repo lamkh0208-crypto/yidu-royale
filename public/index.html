@@ -39,11 +39,19 @@
     <div class="progress"><i id="progress"></i></div>
     <div id="players" class="players"></div>
   </header>
+  <section id="stage" class="stage" hidden aria-live="off">
+    <div id="stageFace" class="face"></div>
+    <div class="stageInfo">
+      <div class="stageTop"><b id="stageName"></b><span id="stageMood"></span></div>
+      <div class="meter" title="怒氣值"><i id="angerBar"></i></div>
+    </div>
+    <div id="angerNum" class="angerNum"></div>
+  </section>
   <section id="rules" class="rules" hidden>
     <h2>怎麼玩</h2>
     <ol>
       <li>虛構角色會在群組裡逼問你，<b>限時回覆</b>，而且一定要包含指定的<b>關鍵字</b>。</li>
-      <li>大家匿名投票「最想救哪一句」，AI 再以角色口吻打分吐槽。</li>
+      <li>角色會<b>一則一則已讀</b>大家的回覆，表情和怒氣值跟著變，再決定誰最該扣命。（AI 不在時改由大家投票）</li>
       <li>每輪回得最爛的幾句<b>扣一條命</b>；已讀不回、漏關鍵字直接扣。每人三條命。</li>
       <li>角色會記得你說過的話。前後矛盾會被抓包。</li>
       <li>出局變<b>亡靈</b>：寫判定詞、投票決定下一輪怎麼扣命。</li>

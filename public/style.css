@@ -141,3 +141,32 @@ footer { background: var(--panel); border-top: 1px solid var(--line); padding: 1
 .sys { animation: fadein .25s; }
 .ghostbox .row button { padding: 10px 12px; }
 .ghostbox .ballot button { padding: 7px 10px; font-size: 14px; }
+
+/* ---- 舞台：出題角色的表情與怒氣值 ---- */
+.stage { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); transition: background .4s; }
+.stage .face { width: 56px; height: 56px; flex: 0 0 auto; }
+.stage .face svg { width: 100%; height: 100%; display: block; }
+.stageInfo { flex: 1; min-width: 0; }
+.stageTop { display: flex; gap: 8px; align-items: baseline; font-size: 14px; white-space: nowrap; overflow: hidden; }
+.stageTop span { color: var(--dim); font-size: 13px; }
+.meter { margin-top: 6px; height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 20%; border-radius: 99px; background: linear-gradient(90deg, #5fd38d, #ffd23f 45%, #ff8a3d 70%, #ff3d3d); background-size: 100vw 100%; transition: width .5s cubic-bezier(.3, 1.6, .5, 1); }
+.angerNum { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; min-width: 4.2em; text-align: right; }
+.stage.m0 .face { animation: bob .9s ease-in-out infinite; }
+.stage.m2 .face { animation: sigh 2.4s ease-in-out infinite; }
+.stage.m3 .face { animation: wobble .5s ease-in-out infinite; }
+.stage.m4 .face { animation: rage .12s linear infinite; }
+.stage.m3 { background: #2a1d17; }
+.stage.m4 { background: #3a1212; }
+.stage.m4 .stageTop span, .stage.m4 .angerNum { color: #ff9c9c; }
+.stage.m0 { background: #16261d; }
+.stage.hit .face svg { animation: hit .45s cubic-bezier(.2, 1.8, .4, 1); }
+.stage.reading .face svg { animation: read 1s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-4px) rotate(-3deg); } }
+@keyframes sigh { 50% { transform: translateY(2px) scale(.97); } }
+@keyframes wobble { 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
+@keyframes rage { 0% { transform: translate(-2px, 1px); } 25% { transform: translate(2px, -1px); } 50% { transform: translate(-1px, -2px); } 75% { transform: translate(2px, 2px); } }
+@keyframes hit { 0% { transform: scale(1.45); } }
+@keyframes read { 0%, 100% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
+.rules { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+.log { min-height: 0; }

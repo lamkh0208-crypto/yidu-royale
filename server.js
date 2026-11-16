@@ -115,7 +115,7 @@ wss.on('connection', (ws, req) => {
       return;
     }
     if (!room || !player || player.ws !== ws) return;
-    if (m.t === 'start') room.start(player);
+    if (m.t === 'start') room.start(player, m.topic);
     else if (m.t === 'reply') room.reply(player, m.text);
     else if (m.t === 'vote') room.vote(player, String(m.rid || ''));
     else if (m.t === 'emoji') room.emoji(player, String(m.e || ''));

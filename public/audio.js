@@ -7,6 +7,7 @@ window.Sound = (() => {
   try { mode = Number(localStorage.getItem('yd_sound')) || 0; } catch (e) { /* ignore */ }
   let mood = 'off'; // off | lobby | idle | tense | panic
   let step = 0, nextTime = 0, timer = null;
+  let emo = 1; // 出題角色的情緒：0 心情好、1 普通、2 不爽、3 暴怒
 
   function init() {
     if (ctx) {
@@ -73,6 +74,13 @@ window.Sound = (() => {
     [-9, -5, 0, 3], // C（低八度根音）
     [-5, -1, 2, 7], // E
   ];
+  // 心情好的時候換成大調和弦（C–G–Am–F）
+  const CHORDS_CALM = [
+    [3, 7, 10, 15],
+    [-2, 2, 5, 10],
+    [0, 3, 7, 12],
+    [-4, 0, 3, 8],
+  ];
   const BPM = { lobby: 76, idle: 88, tense: 104, panic: 132 };
   const ARP = [0, 2, 1, 3, 2, 1, 3, 2];
 
@@ -81,15 +89,17 @@ window.Sound = (() => {
     if (nextTime < ctx.currentTime) nextTime = ctx.currentTime + 0.05;
     while (nextTime < ctx.currentTime + 0.25) {
       playStep(step, nextTime);
-      nextTime += 60 / BPM[mood] / 2; // 八分音符
+      nextTime += 60 / (BPM[mood] * (mood === 'lobby' ? 1 : 0.9 + emo * 0.09)) / 2; // 八分音符；越生氣越快
       step = (step + 1) % 32;
     }
   }
 
   function playStep(s, t) {
-    const chord = CHORDS[Math.floor(s / 8)];
+    const calm = emo === 0 || mood === 'lobby';
+    const chord = (calm ? CHORDS_CALM : CHORDS)[Math.floor(s / 8)];
     const i = s % 8;
     const busy = mood === 'tense' || mood === 'panic';
+    const angry = mood !== 'lobby' && emo >= 2;
     // 低音
     if (i === 0 || (busy && i === 4) || (mood === 'panic' && i % 2 === 0)) tone(musicBus, N(chord[0]) / 2, 0.42, 'triangle', 0.5, t);
     // 分解和弦（大廳比較稀疏）
@@ -102,6 +112,13 @@ window.Sound = (() => {
     if (busy && i % 2 === 1) noise(musicBus, 0.04, 0.1, t, 6000);
     if (busy && i === 4) noise(musicBus, 0.12, 0.14, t, 1800);
     if (mood === 'panic' && i % 4 === 0) tone(musicBus, 70, 0.14, 'sine', 0.5, t, 40);
+    // 不爽：加上不和諧的三全音；暴怒：鋸齒低音加重拍
+    if (angry && (i === 3 || i === 6)) tone(musicBus, N(chord[0] + 6) * 2, 0.12, 'sawtooth', 0.05 + emo * 0.015, t);
+    if (mood !== 'lobby' && emo === 3) {
+      if (i % 2 === 0) tone(musicBus, N(chord[0]) / 2, 0.2, 'sawtooth', 0.16, t);
+      if (i % 4 === 0) tone(musicBus, 80, 0.16, 'sine', 0.55, t, 38);
+      if (i % 4 === 2) noise(musicBus, 0.1, 0.16, t, 1500);
+    }
   }
 
   // ---------- 音效 ----------
@@ -116,6 +133,8 @@ window.Sound = (() => {
     win: (t) => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(sfxBus, f, i === 4 ? 0.6 : 0.16, 'triangle', 0.3, t + i * 0.12)),
     ghost: (t) => tone(sfxBus, 300, 0.5, 'sine', 0.18, t, 900),
     emoji: (t) => tone(sfxBus, 1500, 0.05, 'sine', 0.1, t),
+    rage: (t) => { tone(sfxBus, 140, 0.35, 'sawtooth', 0.25, t, 60); tone(sfxBus, 147, 0.35, 'square', 0.12, t, 64); noise(sfxBus, 0.2, 0.22, t, 500); },
+    happy: (t) => [784, 988, 1175].forEach((f, i) => tone(sfxBus, f, 0.1, 'sine', 0.2, t + i * 0.07)),
     start: (t) => [330, 440, 660].forEach((f, i) => tone(sfxBus, f, 0.14, 'square', 0.12, t + i * 0.09)),
   };
 
@@ -128,6 +147,9 @@ window.Sound = (() => {
     setMood(m) {
       if (m === mood) return;
       mood = m;
+    },
+    setEmotion(level) {
+      emo = Math.max(0, Math.min(3, level | 0));
     },
     cycle() {
       mode = (mode + 1) % 3;
