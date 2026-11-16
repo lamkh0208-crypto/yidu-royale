@@ -307,7 +307,7 @@ class Room {
     const criterion = this.nextCriterion
       || (final ? story.CRITERIA[3] : story.CRITERIA[(this.round - 1) % story.CRITERIA.length]);
     this.nextCriterion = null;
-    const target = this.alive.find((p) => p.name === prompt.target);
+    const target = this.alive.find((p) => !p.bot && p.name === prompt.target); // 只點名真人
     this.current = {
       character: prompt.character,
       message: prompt.message,
