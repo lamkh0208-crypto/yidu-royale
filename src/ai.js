@@ -181,7 +181,7 @@ function buildProviders(env) {
       out.push({
         name, call: callOpenAICompat, key: env.DEEPSEEK_API_KEY,
         baseUrl: env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-        model: env.DEEPSEEK_MODEL || 'deepseek-chat',
+        model: env.DEEPSEEK_MODEL || 'deepseek-flash',
       });
     } else if (name === 'doubao' && env.DOUBAO_API_KEY && env.DOUBAO_MODEL) {
       out.push({
