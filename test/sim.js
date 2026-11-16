@@ -118,8 +118,48 @@ async function runGame(label, env, port) {
   return fail.length;
 }
 
+// 單人模式：一個真人 + AI 路人，應該能從頭玩到結束。
+async function runSolo(label, env, port) {
+  const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+    env: { ...process.env, PORT: port, T_INTRO: 60, T_ANSWER: 500, T_VOTE: 400, T_JUDGE: 800, T_REVEAL: 80, T_SCENARIO: 1500, ...env },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  await new Promise((r) => srv.stdout.once('data', r));
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+  let last = null, acted = '', botReplied = false;
+  ws.on('open', () => ws.send(JSON.stringify({ t: 'create', name: '獨行俠', solo: true })));
+  ws.on('message', (raw) => {
+    const m = JSON.parse(raw);
+    if (m.t !== 'state') return;
+    last = m;
+    if (m.log.some((e) => e.k === 'reply' && m.players.find((p) => p.id === e.pid && p.bot) && e.text)) botReplied = true;
+    const key = `${m.phase}${m.round}`;
+    if (acted === key) return;
+    const meP = m.players.find((p) => p.id === m.you.id);
+    if (m.phase === 'ANSWER' && meP.lives > 0) { acted = key; ws.send(JSON.stringify({ t: 'reply', text: `${m.keyword}我來處理` })); }
+    else if (m.phase === 'VOTE' && !m.myVote) { acted = key; const pick = m.ballot.find((x) => !x.mine); if (pick) ws.send(JSON.stringify({ t: 'vote', rid: pick.rid })); }
+  });
+  const t0 = Date.now();
+  while ((!last || last.phase !== 'OVER') && Date.now() - t0 < 40000) await sleep(50);
+  const fail = [];
+  if (!last || last.phase !== 'OVER') fail.push('單人遊戲沒有在 40 秒內結束');
+  else {
+    if (last.players.filter((p) => p.bot).length !== 3) fail.push(`應該補 3 個 AI 路人，實際 ${last.players.filter((p) => p.bot).length}`);
+    if (!botReplied) fail.push('AI 路人沒有回覆');
+    if (!last.result || !last.result.winner) fail.push('沒有贏家');
+    if (last.result && last.result.best && last.result.best.name !== '獨行俠') fail.push('最神回覆不該頒給 AI 路人');
+  }
+  ws.close();
+  srv.kill();
+  console.log(`${fail.length ? '✗' : '✓'} ${label}：${last ? last.round : 0} 輪，贏家=${last?.result?.winner?.name}${last?.result?.winner?.bot ? '（AI 路人）' : ''}`);
+  for (const f of fail) console.log(`   - ${f}`);
+  return fail.length;
+}
+
 (async () => {
   let bad = 0;
+  bad += await runSolo('單人＋AI 路人（純投票）', { AI_PROVIDERS: '' }, 4104);
+  bad += await runSolo('單人＋AI 路人（模擬 AI）', { AI_PROVIDERS: 'mock' }, 4105);
   bad += await runGame('純投票（未設定 AI）', { AI_PROVIDERS: '' }, 4101);
   bad += await runGame('模擬 AI', { AI_PROVIDERS: 'mock' }, 4102);
   bad += await runGame('AI 金鑰無效 → 自動退回保底', { AI_PROVIDERS: 'gemini', GEMINI_API_KEY: 'invalid', T_SCENARIO: 2500 }, 4103);

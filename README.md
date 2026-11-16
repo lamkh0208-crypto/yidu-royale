@@ -1,6 +1,6 @@
 # 已讀不回大逃殺
 
-3–12 人即時連線的聊天室淘汰賽。虛構角色（老闆、前任、親戚…）在群組裡逼問，玩家限時回覆且必須包含關鍵字；每輪回得最爛的幾句各扣一條命，三條命扣完出局當觀眾。
+1–12 人即時連線的聊天室淘汰賽（不足 4 人自動補 AI 路人，一個人也能玩）。虛構角色（老闆、前任、親戚…）在群組裡逼問，玩家限時回覆且必須包含關鍵字；每輪回得最爛的幾句各扣一條命，三條命扣完出局當觀眾。
 
 ## 執行
 
@@ -26,7 +26,7 @@ AI_PROVIDERS=gemini GEMINI_API_KEY=你的金鑰 npm start
 npm test
 ```
 
-用 6 個機器人各玩完整一局，涵蓋純投票、模擬 AI、AI 金鑰無效自動退回三種情況。
+用機器人各玩完整一局，涵蓋單人＋AI 路人、純投票、模擬 AI、AI 金鑰無效自動退回等情況。
 
 ```bash
 AI_PROVIDERS=gemini GEMINI_API_KEY=你的金鑰 npm run eval -- 10
@@ -38,4 +38,4 @@ AI_PROVIDERS=gemini GEMINI_API_KEY=你的金鑰 npm run eval -- 10
 
 需要支援 WebSocket 的長駐主機。Render：新增 Web Service，Build `npm install`、Start `npm start`，在 Environment 填金鑰。Fly.io：用附的 `Dockerfile`，`fly launch` 後 `fly secrets set GEMINI_API_KEY=...`。房間狀態存在記憶體，請只開一台機器。
 
-設計細節見 [docs/DESIGN.md](docs/DESIGN.md)。
+設計細節見 [docs/DESIGN.md](docs/DESIGN.md)，上線前檢查清單見 [docs/LAUNCH.md](docs/LAUNCH.md)。

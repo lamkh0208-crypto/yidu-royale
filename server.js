@@ -9,7 +9,7 @@ const { AI } = require('./src/ai');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC = path.join(__dirname, 'public');
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const MIME = { '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 
 const ai = new AI();
 const rooms = new Map();
@@ -57,6 +57,8 @@ const server = http.createServer((req, res) => {
       'content-type': MIME[path.extname(file)] || 'application/octet-stream',
       'cache-control': 'no-cache',
       'x-content-type-options': 'nosniff',
+      'referrer-policy': 'same-origin',
+      'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
     });
     res.end(buf);
   });
@@ -66,6 +68,13 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server, maxPayload: 2048 });
 
 wss.on('connection', (ws, req) => {
+  // 只接受從本站頁面發起的連線（瀏覽器一定會帶 Origin；沒有 Origin 的是測試腳本等非瀏覽器用戶端）。
+  const origin = req.headers.origin;
+  if (origin) {
+    let host = '';
+    try { host = new URL(origin).host; } catch (e) { /* ignore */ }
+    if (host !== req.headers.host) return ws.close(4003, 'bad origin');
+  }
   const ip = ipOf(req);
   const info = ipInfo(ip);
   if (info.conns >= MAX_CONNS_PER_IP) return ws.close(4029, 'too many connections');
@@ -111,6 +120,7 @@ wss.on('connection', (ws, req) => {
       const r = target.join(ws, m.name, typeof m.token === 'string' ? m.token : '');
       if (r.error) return send({ t: 'error', msg: r.error, fatal: true });
       room = target;
+      if (m.t === 'create' && m.solo === true) target.start(r.player, '');
       player = r.player;
       return;
     }
@@ -121,6 +131,7 @@ wss.on('connection', (ws, req) => {
     else if (m.t === 'emoji') room.emoji(player, String(m.e || ''));
     else if (m.t === 'word') room.word(player, m.text);
     else if (m.t === 'gvote') room.gvote(player, String(m.pid || ''));
+    else if (m.t === 'kick') room.kick(player, String(m.id || ''));
     else if (m.t === 'again') room.again(player);
   });
 
@@ -143,7 +154,7 @@ setInterval(() => {
   }
   const now = Date.now();
   for (const [code, room] of rooms) {
-    if (!room.connected.length && now - room.touched > 5 * 60 * 1000) {
+    if (!room.humans.length && now - room.touched > 5 * 60 * 1000) {
       room.destroy();
       rooms.delete(code);
     }

@@ -91,6 +91,8 @@
   let stageMood = -1;
   let stageWho = '';
   let topicDraft = '';
+  let pending = null;
+  let wakeTimer = null;
   let retry = 0;
   const store = {
     get: (k) => { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } },
@@ -108,6 +110,10 @@
 
   // ---------- 連線 ----------
   function connect(first) {
+    pending = first;
+    clearTimeout(wakeTimer);
+    if (!S) wakeTimer = setTimeout(() => { if (!S) $('homeErr').textContent = '伺服器喚醒中，第一次連線最多約需 50 秒，請稍候…'; }, 2500);
+    busy(true);
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
     ws.onopen = () => {
       retry = 0;
@@ -115,11 +121,14 @@
     };
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
-      if (m.t === 'state') onState(m);
+      if (m.t === 'state') { clearTimeout(wakeTimer); busy(false); onState(m); }
       else if (m.t === 'emoji') { floater(m.e); Sound.play('emoji'); }
       else if (m.t === 'error') {
         if (m.fatal || !S) {
           store.set('yd_code', '');
+          pending = null;
+          clearTimeout(wakeTimer);
+          busy(false);
           S = null;
           show('home');
           $('homeErr').textContent = m.msg;
@@ -128,11 +137,25 @@
         } else toast(m.msg);
       }
     };
-    ws.onclose = () => {
-      if (!S) return;
+    ws.onclose = (ev) => {
+      if (ev.code === 4001) { // 被房主移出
+        store.set('yd_code', ''); store.set('yd_token', '');
+        S = null; show('home'); busy(false);
+        $('homeErr').textContent = '你被房主移出房間了';
+        return;
+      }
+      if (!S) {
+        // 還沒進房就斷線：多半是伺服器正在喚醒，自動重試約一分鐘。
+        if (pending && retry < 14) setTimeout(() => !S && connect(pending), Math.min(5000, 1500 * ++retry));
+        else { busy(false); $('homeErr').textContent = '連不上伺服器，請稍後再試'; }
+        return;
+      }
       toast('連線中斷，重新連線中…');
       setTimeout(() => connect({ t: 'join', code: S.code, name: store.get('yd_nm'), token: S.you.token }), Math.min(5000, 600 * 2 ** retry++));
     };
+  }
+  function busy(on) {
+    for (const id of ['btnJoin', 'btnCreate', 'btnSolo']) $(id).disabled = on;
   }
   const send = (o) => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
 
@@ -150,7 +173,7 @@
     try { localStorage.setItem('yd_name', name); } catch (e) { /* ignore */ }
     store.set('yd_nm', name);
     Sound.init();
-    connect(kind === 'create' ? { t: 'create', name } : { t: 'join', code, name });
+    connect(kind === 'join' ? { t: 'join', code, name } : { t: 'create', name, solo: kind === 'solo' });
   }
 
   // ---------- 畫面 ----------
@@ -294,8 +317,10 @@
         const lives = p.lives + (pending[p.id] || 0);
         const hurt = shownLives[p.id] != null && lives < shownLives[p.id];
         shownLives[p.id] = lives;
-        return h('div', { class: `pl${p.id === S.you.id ? ' me' : ''}${S.round && !lives ? ' dead' : ''}${p.connected ? '' : ' off'}${hurt ? ' hurt' : ''}` },
+        const canKick = (S.phase === 'LOBBY' || S.phase === 'OVER') && me().host && p.id !== S.you.id && !p.bot;
+        return h('div', { onclick: canKick ? () => confirm(`把「${p.name}」移出房間？`) && send({ t: 'kick', id: p.id }) : null, class: `pl${canKick ? ' kickable' : ''}${p.id === S.you.id ? ' me' : ''}${S.round && !lives ? ' dead' : ''}${p.connected ? '' : ' off'}${hurt ? ' hurt' : ''}` },
           p.host && h('span', { class: 'crown' }, '👑'),
+          p.bot && h('span', { class: 'botTag' }, '🤖'),
           p.done && h('span', { class: 'done' }, '✓'),
           avatar(p.hue, p.face),
           h('div', { class: 'hp' }, S.round ? (lives ? '♥'.repeat(lives) : '💀') : ''),
@@ -366,7 +391,7 @@
     if (S.phase === 'LOBBY') {
       const n = S.players.filter((p) => p.connected).length;
       fill(dock, h('div', { class: 'stack' },
-        h('p', { class: 'hint' }, `房間碼 `, h('b', {}, S.code), `，目前 ${n} 人（${S.minPlayers}–12 人可開始）。`,
+        h('p', { class: 'hint' }, `房間碼 `, h('b', {}, S.code), `，目前 ${n} 人。`, n < S.botFill ? `不足 ${S.botFill} 人會補上 🤖 AI 路人當對手。` : '',
           S.aiEnabled ? ' AI 裁判已就緒。' : ' 未設定 AI，本局為純投票模式。'),
         h('button', { class: 'ghost', onclick: invite }, '📎 分享邀請連結'),
         my.host && S.aiEnabled && (() => {
@@ -410,7 +435,8 @@
       const r = S.result;
       fill(dock, h('div', { class: 'stack result' },
         h('h2', {}, r.winner ? `🏆 ${r.winner.name} 活到最後` : '無人生還'),
-        h('p', {}, `《${r.title}》共 ${r.rounds} 輪`),
+        h('p', {}, `《${r.title}》共 ${r.rounds} 輪${r.winner && r.winner.bot ? '｜你們輸給了 AI 路人 🤖' : ''}`),
+        r.awards && r.awards.length ? h('div', { class: 'awards' }, r.awards.map((a) => h('div', {}, h('b', {}, `${a.icon} ${a.title}`), ` ${a.name}`, h('small', {}, a.desc)))) : null,
         h('div', { class: 'rank' }, r.ranking.slice(0, 6).map((x, i) => h('span', { class: x.id === S.you.id ? 'me' : '' }, `${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${x.name}${x.lives ? ' ' + '♥'.repeat(x.lives) : ''}`))),
         h('div', { class: 'two' },
           r.best && h('button', { class: 'ghost', onclick: shareCard }, '🖼 最神回覆卡'),
@@ -552,6 +578,7 @@
   if (qRoom) $('code').value = qRoom;
   $('btnJoin').onclick = () => enter('join');
   $('btnCreate').onclick = () => enter('create');
+  $('btnSolo').onclick = () => enter('solo');
   $('code').addEventListener('keydown', (e) => e.key === 'Enter' && enter('join'));
   $('btnCode').onclick = invite;
   const SND = ['🔊', '🔔', '🔇'];

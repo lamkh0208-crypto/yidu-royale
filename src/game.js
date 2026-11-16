@@ -8,14 +8,15 @@ const story = require('./story');
 
 const num = (v, d) => (Number.isFinite(Number(v)) && v !== undefined && v !== '' ? Number(v) : d);
 const T = {
-  scenario: num(process.env.T_SCENARIO, 9000),
+  scenario: num(process.env.T_SCENARIO, 12000),
   intro: num(process.env.T_INTRO, 3500),
   answer: num(process.env.T_ANSWER, 40000),
   vote: num(process.env.T_VOTE, 15000),
   judgeMax: num(process.env.T_JUDGE, 12000),
   reveal: num(process.env.T_REVEAL, 0), // 0 = 依回覆數自動計算
 };
-const MIN_PLAYERS = num(process.env.MIN_PLAYERS, 3);
+const MIN_PLAYERS = num(process.env.MIN_PLAYERS, 1);
+const BOT_FILL = num(process.env.BOT_FILL, 4); // 真人不足這個數字時，用 AI 路人補滿
 const MAX_PLAYERS = 12;
 const MAX_MEMBERS = 30;
 const MAX_ROUNDS = num(process.env.MAX_ROUNDS, 8);
@@ -75,6 +76,9 @@ class Room {
   get connected() {
     return [...this.players.values()].filter((p) => p.connected);
   }
+  get humans() {
+    return [...this.players.values()].filter((p) => p.connected && !p.bot);
+  }
   get alive() {
     return [...this.players.values()].filter((p) => p.lives > 0);
   }
@@ -129,7 +133,7 @@ class Room {
     const all = [...this.players.values()];
     const host = all.find((p) => p.host);
     if (host && host.connected) return;
-    const next = all.find((p) => p.connected);
+    const next = all.find((p) => p.connected && !p.bot);
     if (!next) return;
     if (host) host.host = false;
     next.host = true;
@@ -153,12 +157,13 @@ class Room {
       mode: this.mode,
       aiEnabled: this.ai.enabled,
       minPlayers: MIN_PLAYERS,
+      botFill: BOT_FILL,
       typing: this.typing,
       anger: this.anger,
       you: { id: p.id, token: p.token },
       emojis: EMOJIS,
       players: [...this.players.values()].map((x) => ({
-        id: x.id, name: x.name, hue: x.hue, face: x.face, lives: x.lives, host: x.host, connected: x.connected,
+        id: x.id, name: x.name, hue: x.hue, face: x.face, lives: x.lives, host: x.host, connected: x.connected, bot: !!x.bot,
         done: !!c && ((this.phase === 'ANSWER' && c.replies.has(x.id)) || (this.phase === 'VOTE' && c.votes.has(x.id))),
       })),
       scenario: this.scenario && { title: this.scenario.title, premise: this.scenario.premise,
@@ -216,13 +221,28 @@ class Room {
   // ---------- 流程 ----------
   async start(p, topic) {
     if (!p.host || (this.phase !== 'LOBBY' && this.phase !== 'OVER')) return;
+    // 上一局的 AI 路人先清掉，再依這局的真人數量補滿。
+    for (const x of [...this.players.values()]) if (x.bot) this.players.delete(x.id);
+    const people = this.humans.slice(0, MAX_PLAYERS);
+    if (people.length < MIN_PLAYERS) return this.err(p, `至少要 ${MIN_PLAYERS} 個人才能開始`);
+    const names = shuffle(story.BOT_NAMES);
+    const taken = new Set(people.map((x) => x.name));
+    for (let i = people.length; i < BOT_FILL; i++) {
+      const name = names.find((n) => !taken.has(n)) || `路人${i}`;
+      taken.add(name);
+      const bot = {
+        id: uid(4), token: uid(12), name, hue: crypto.randomInt(360), face: crypto.randomInt(6),
+        lives: 0, total: 0, host: false, lastEmoji: 0, bot: true, connected: true, ws: null,
+      };
+      this.players.set(bot.id, bot);
+    }
     const roster = this.connected.slice(0, MAX_PLAYERS);
-    if (roster.length < MIN_PLAYERS) return this.err(p, `至少要 ${MIN_PLAYERS} 個人才能開始`);
     this.resetGame();
     for (const x of this.players.values()) {
       x.played = roster.includes(x);
       x.lives = x.played ? LIVES : 0;
       x.total = 0;
+      x.stats = { ghosts: 0, rages: 0, lost: 0, n: 0 };
     }
     this.typing = '編劇';
     this.setPhase('INTRO', 0);
@@ -246,7 +266,8 @@ class Room {
       first = sc.first;
     } else {
       const fb = story.pick(story.FALLBACK_STORIES);
-      this.mode = 'vote';
+      // 劇本用手寫的保底，但每一輪仍會嘗試 AI 判定；AI 一恢復就接手後續劇情。
+      this.mode = this.ai.enabled ? 'ai' : 'vote';
       this.scenario = { title: fb.title, premise: fb.premise, characters: fb.characters, fallback: fb };
       first = this.fallbackPrompt(0);
     }
@@ -255,7 +276,7 @@ class Room {
     this.sys(
       `登場：${this.scenario.characters.map((c) => `${c.name}（${c.role}）`).join('、')}`
     );
-    if (this.mode === 'vote') this.sys('本局為純投票模式：由大家投票決定誰的回覆被扣命。');
+    if (this.mode === 'vote') this.sys(this.canVote(2) ? '本局未設定 AI：由大家投票決定誰的回覆被扣命。' : '本局未設定 AI：由規則評分（誠意、具體程度）決定誰扣命。');
     this.beginRound(first);
   }
 
@@ -292,6 +313,7 @@ class Room {
       message: prompt.message,
       keyword: prompt.keyword,
       target: target ? target.name : '',
+      botReplies: prompt.botReplies || [],
       criterion,
       final,
       aliveIds: this.alive.map((p) => p.id),
@@ -314,6 +336,63 @@ class Room {
     this.log.push({ k: 'npc', who: c.character, text: c.message, keyword: c.keyword, target: c.target });
     this.setPhase('ANSWER', T.answer, () => this.closeAnswer());
     this.broadcast();
+    this.scheduleBots();
+  }
+
+  // ---------- AI 路人：人數不足時的電腦對手 ----------
+  botText(i) {
+    const c = this.current;
+    const fromAI = (c.botReplies || []).filter((t) => t.toLowerCase().includes(c.keyword.toLowerCase()));
+    if (fromAI[i]) return fromAI[i];
+    const tier = story.BOT_LINES[i % story.BOT_LINES.length];
+    return story.pick(tier).replace('{kw}', c.keyword);
+  }
+
+  scheduleBots() {
+    const c = this.current;
+    const g = this.gen;
+    const bots = shuffle(c.aliveIds.map((id) => this.players.get(id)).filter((p) => p && p.bot));
+    c.botPlan = bots.map((b, i) => ({ bot: b, text: this.botText(i) }));
+    c.botPlan.forEach((plan, i) => {
+      const delay = T.answer * (0.12 + 0.1 * i + Math.random() * 0.12);
+      setTimeout(() => g === this.gen && this.reply(plan.bot, plan.text), delay);
+    });
+  }
+
+  // 真人都答完了就不用等電腦慢慢打字。
+  flushBots() {
+    const c = this.current;
+    if (!c || this.phase !== 'ANSWER' || !c.botPlan) return;
+    const waitingHuman = c.aliveIds.some((id) => {
+      const p = this.players.get(id);
+      return p && !p.bot && p.connected && !c.replies.has(id);
+    });
+    if (waitingHuman) return;
+    const g = this.gen;
+    c.botPlan.filter((x) => !c.replies.has(x.bot.id)).forEach((plan, i) => {
+      setTimeout(() => g === this.gen && this.reply(plan.bot, plan.text), 350 * (i + 1));
+    });
+  }
+
+  botVotes() {
+    const c = this.current;
+    const g = this.gen;
+    for (const b of this.players.values()) {
+      if (!b.bot) continue;
+      const options = c.ballot.filter((x) => x.pid !== b.id);
+      if (!options.length) continue;
+      setTimeout(() => g === this.gen && this.vote(b, story.pick(options).rid), T.vote * (0.1 + Math.random() * 0.3));
+    }
+  }
+
+  kick(p, id) {
+    if (!p.host || (this.phase !== 'LOBBY' && this.phase !== 'OVER')) return;
+    const x = this.players.get(id);
+    if (!x || x === p || x.bot) return;
+    this.players.delete(id);
+    clearTimeout(x.dropTimer);
+    if (x.ws) try { x.ws.close(4001, 'kicked'); } catch (e) { /* ignore */ }
+    this.broadcast();
   }
 
   reply(p, text) {
@@ -323,6 +402,7 @@ class Room {
     if (!t) return;
     c.replies.set(p.id, { text: t, at: Date.now() });
     this.broadcast();
+    if (!p.bot) this.flushBots();
     this.checkEarly();
   }
 
@@ -423,7 +503,7 @@ class Room {
         facts: this.facts,
         recent: this.history.slice(-3),
         eliminated: [...this.players.values()].filter((p) => p.lives === 0 && p.played).map((p) => p.name),
-        alivePlayers: this.alive.map((p) => p.name),
+        alivePlayers: this.alive.filter((p) => !p.bot).map((p) => p.name),
         lives: Object.fromEntries(this.alive.map((p) => [p.name, p.lives])),
         recentTargets: this.targets.slice(-2),
         current: { character: c.character, message: c.message, keyword: c.keyword },
@@ -432,7 +512,7 @@ class Room {
       this.judgePromise = this.ai.judge({ ...payload, anger: this.anger }, T.judgeMax).catch(() => null);
       return this.awaitJudge();
     }
-    if (c.ballot.length >= 2) this.openVote();
+    if (this.canVote(c.ballot.length)) this.openVote();
     else this.awaitJudge();
   }
 
@@ -450,17 +530,26 @@ class Room {
       await sleep(Math.min(1500, T.judgeMax));
     }
     if (g !== this.gen) return;
-    if (!verdict && this.judgePromise && c.ballot.length >= 2) {
-      this.sys('（AI 斷線中，本輪改由大家投票決定）');
-      return this.openVote();
+    if (!verdict && this.judgePromise) {
+      if (this.canVote(c.ballot.length)) {
+        this.sys('（AI 斷線中，本輪改由大家投票決定）');
+        return this.openVote();
+      }
+      if (c.ballot.length) this.sys('（AI 斷線中，本輪改用規則評分）');
     }
     this.resolve(verdict);
+  }
+
+  // 投票要有意義，至少要 3 位真人在線、2 則以上有效回覆；否則改用規則評分。
+  canVote(ballotSize) {
+    return ballotSize >= 2 && this.humans.length >= 3;
   }
 
   openVote() {
     this.typing = '';
     this.setPhase('VOTE', T.vote, () => this.closeVote());
     this.broadcast();
+    this.botVotes();
     this.checkEarly();
   }
 
@@ -486,7 +575,9 @@ class Room {
       const voteScore = maxVotes ? (votes / maxVotes) * 100 : 50;
       const a = aiOK ? verdict.scores[b.rid] : null;
       const aiScore = a ? a.score : 50;
-      let score = aiOK ? (maxVotes ? aiScore * 0.7 + voteScore * 0.3 : aiScore) : voteScore;
+      // 沒有 AI 也沒有人投票（單人、雙人或大家都沒投）：用規則評分。
+      let score = aiOK ? (maxVotes ? aiScore * 0.7 + voteScore * 0.3 : aiScore)
+        : maxVotes ? voteScore : story.heuristicScore(b.text, c.keyword);
       score -= order.indexOf(b) * 0.01;
       return { ...b, votes, score, roast: a ? a.roast : '' };
     });
@@ -521,6 +612,7 @@ class Room {
       const aiMood = aiOK && verdict.scores[e.rid] ? verdict.scores[e.rid].mood : null;
       const mood = aiMood != null ? aiMood : { top: 1, mid: 2, bottom: 4 }[tier];
       moods.push(mood);
+      if (p.stats) { p.stats.n++; if (lost) p.stats.lost++; if (mood === 4) p.stats.rages++; }
       const roast = e.roast || story.pick(story.ROASTS[tier]);
       p.total += e.score;
       if (lost) p.lives--;
@@ -528,7 +620,8 @@ class Room {
         k: 'reply', pid: p.id, name: p.name, hue: p.hue, face: p.face, text: e.text, votes: e.votes, mood,
         score: aiOK ? Math.round(e.score) : null, who: c.character, roast, lost, out: lost && p.lives === 0,
       });
-      if (i === 0 && !lost && (!this.best || e.score >= this.best.score)) {
+      const bestHuman = entries.find((x) => !this.players.get(x.pid).bot && !losers.has(x.pid));
+      if (bestHuman === e && (!this.best || e.score >= this.best.score)) {
         this.best = { name: p.name, hue: p.hue, face: p.face, text: e.text, roast, who: c.character,
           question: c.message, score: e.score, round: this.round };
       }
@@ -536,6 +629,7 @@ class Room {
     for (const h of hard) {
       const p = this.players.get(h.pid);
       const lost = losers.has(h.pid); // 全員都違規時，第一位會被保住最後一條命
+      if (p.stats) { p.stats.n++; if (lost) p.stats.lost++; if (h.reason === 'timeout') p.stats.ghosts++; }
       if (lost) p.lives--;
       this.log.push({
         k: 'reply', pid: p.id, name: p.name, hue: p.hue, face: p.face, mood: 4,
@@ -559,7 +653,8 @@ class Room {
     if (aiOK && verdict.ending) this.ending = verdict.ending;
     this.nextPrompt = aiOK && verdict.next ? verdict.next : this.fallbackPrompt(this.round);
 
-    const over = this.alive.length <= 1 || this.round >= MAX_ROUNDS;
+    // 真人全滅就結束，不用看電腦互打。
+    const over = this.alive.length <= 1 || this.round >= MAX_ROUNDS || !this.alive.some((p) => !p.bot);
     const ms = T.reveal || Math.min(24000, 5500 + 1500 * c.aliveIds.length);
     this.setPhase('REVEAL', ms, () => (over ? this.finish() : this.beginRound(this.nextPrompt)));
     this.broadcast();
@@ -569,8 +664,18 @@ class Room {
     const ranking = [...this.players.values()]
       .filter((p) => p.played)
       .sort((a, b) => b.lives - a.lives || b.total - a.total)
-      .map((p) => ({ id: p.id, name: p.name, hue: p.hue, face: p.face, lives: p.lives }));
-    this.result = { winner: ranking[0] || null, ranking, best: this.best, title: this.scenario.title, rounds: this.round };
+      .map((p) => ({ id: p.id, name: p.name, hue: p.hue, face: p.face, lives: p.lives, bot: !!p.bot }));
+    // 結算獎項（只頒給真人）
+    const ppl = [...this.players.values()].filter((p) => p.played && !p.bot && p.stats);
+    const top = (f) => ppl.filter((p) => f(p) > 0).sort((a, b) => f(b) - f(a))[0];
+    const awards = [];
+    const ghost = top((p) => p.stats.ghosts);
+    if (ghost) awards.push({ icon: '👻', title: '已讀王', name: ghost.name, desc: `已讀不回 ${ghost.stats.ghosts} 次` });
+    const rage = top((p) => p.stats.rages);
+    if (rage) awards.push({ icon: '🤬', title: '引戰王', name: rage.name, desc: `把對方惹到暴怒 ${rage.stats.rages} 次` });
+    const safe = top((p) => (p.stats.n >= 2 ? p.stats.n - p.stats.lost : 0));
+    if (safe) awards.push({ icon: '🛟', title: '求生慾最強', name: safe.name, desc: `${safe.stats.n} 輪只被扣 ${safe.stats.lost} 次` });
+    this.result = { winner: ranking[0] || null, ranking, best: this.best, title: this.scenario.title, rounds: this.round, awards, anger: this.anger };
     // 結局：揭曉角色祕密。AI 有寫就用 AI 的，否則用劇本設定組出來。
     const ending = this.ending
       || this.scenario.characters.filter((c) => c.secret).map((c) => `${c.name}：${c.secret}`).join('；');

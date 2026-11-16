@@ -135,8 +135,33 @@ const ROASTS = {
   nokeyword: ['你根本沒在看我問什麼。', '答非所問，再見。', '關鍵的東西一個字都沒提到？'],
 };
 
+// AI 路人的名字與保底回覆（{kw} 會換成本輪關鍵字）。三檔：有誠意、敷衍、火上加油。
+const BOT_NAMES = ['社畜阿宏', '裝忙小慧', '窗邊阿伯', '新人小安', '外包阿傑', '潛水學長', '已讀怪', '加班魔人'];
+const BOT_LINES = [
+  [
+    '真的很抱歉，{kw}的部分我現在立刻處理，半小時內回報',
+    '收到！{kw}這件事我來負責，等等給你完整說明',
+    '不好意思讓你擔心了，{kw}我已經在處理，馬上更新進度',
+  ],
+  ['{kw}我晚點看一下', '{kw}喔，好，知道了', '嗯嗯{kw}，再說'],
+  ['{kw}？那不是我負責的吧', '蛤，{kw}關我什麼事', '{kw}這種小事也要半夜問喔'],
+];
+
+// 沒有 AI、也無法投票時的規則評分：看誠意、具體程度與有沒有火上加油。
+function heuristicScore(text, keyword) {
+  const body = text.split(keyword).join('');
+  const len = Array.from(body.trim()).length;
+  let s = 30 + Math.min(len, 22) * 1.5;
+  if (/抱歉|不好意思|對不起|謝謝|辛苦|麻煩/.test(text)) s += 14;
+  if (/馬上|立刻|現在|今天|明天|分鐘|小時|點前|\d/.test(text)) s += 10;
+  if (/我來|我會|負責|處理|補救|回報|更新/.test(text)) s += 8;
+  if (len <= 3) s -= 25;
+  if (/蛤|關我|不是我|哈哈|小事|再說|隨便|干我/.test(text)) s -= 28;
+  return Math.max(0, Math.min(100, Math.round(s + Math.random() * 6 - 3)));
+}
+
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-module.exports = { CRITERIA, FALLBACK_STORIES, SEEDS, KEYWORD_POOL, GENERIC_LINES, ROASTS, pick };
+module.exports = { heuristicScore, BOT_NAMES, BOT_LINES, CRITERIA, FALLBACK_STORIES, SEEDS, KEYWORD_POOL, GENERIC_LINES, ROASTS, pick };

@@ -5,7 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#101418">
 <title>已讀不回大逃殺</title>
-<meta name="description" content="3–12 人即時連線的聊天室淘汰賽。被老闆、前任、親戚訊息轟炸，誰的回覆最爛誰扣命。">
+<meta name="description" content="1–12 人的聊天室淘汰賽。被老闆、前任、親戚訊息轟炸，回得最爛的那句扣一條命。一個人也能玩。">
+<meta property="og:title" content="已讀不回大逃殺">
+<meta property="og:description" content="老闆、前任、親戚同時敲你。回得最爛的那句，扣一條命。">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,8 +30,9 @@
       <button id="btnJoin" class="primary">加入房間</button>
       <div class="or">或</div>
     </div>
-    <button id="btnCreate" class="ghost">開一間新房間</button>
-    <p class="notice">全部角色皆為虛構。請勿輸入真實姓名、電話等個資；回覆內容可能會送交 AI 服務評分。</p>
+    <button id="btnCreate" class="ghost">開一間新房間（揪朋友）</button>
+    <button id="btnSolo" class="ghost">🤖 一個人玩（對戰 AI 路人）</button>
+    <p class="notice">全部角色皆為虛構。請勿輸入真實姓名、電話等個資；回覆內容可能會送交 AI 服務評分。<a href="privacy.html">隱私與使用說明</a></p>
     <p id="homeErr" class="err" role="alert"></p>
   </div>
 </main>

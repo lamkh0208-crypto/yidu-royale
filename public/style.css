@@ -170,3 +170,17 @@ footer { background: var(--panel); border-top: 1px solid var(--line); padding: 1
 @keyframes read { 0%, 100% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
 .rules { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
 .log { min-height: 0; }
+
+/* ---- 上線前打磨 ---- */
+.botTag { position: absolute; top: -6px; right: 2px; font-size: 12px; }
+.pl.kickable { cursor: pointer; }
+.pl.kickable:active .av { outline: 2px solid var(--danger); }
+.awards { display: flex; flex-direction: column; gap: 4px; font-size: 13px; text-align: left; background: var(--panel2); border-radius: 12px; padding: 8px 12px; }
+.awards b { color: var(--accent); }
+.awards small { color: var(--dim); margin-left: 8px; }
+.notice a { color: var(--dim); margin-left: 4px; }
+.page { max-width: 640px; margin: 0 auto; padding: 24px 20px 60px; line-height: 1.7; }
+.page h1 { font-size: 26px; } .page h2 { font-size: 18px; margin-top: 28px; color: var(--accent); }
+.page a { color: var(--accent); }
+#home { justify-content: flex-start; overflow-y: auto; }
+#home .home-card { margin: auto 0; }
