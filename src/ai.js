@@ -218,6 +218,13 @@ function buildProviders(env) {
         baseUrl: env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
         model: env.DEEPSEEK_MODEL || 'deepseek-flash',
       });
+    } else if (name === 'openrouter' && env.OPENROUTER_API_KEY) {
+      // OpenRouter 的免費路由：自動挑一個目前可用的免費模型。
+      out.push({
+        name, call: callOpenAICompat, key: env.OPENROUTER_API_KEY,
+        baseUrl: env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+        model: env.OPENROUTER_MODEL || 'openrouter/free',
+      });
     } else if (name === 'doubao' && env.DOUBAO_API_KEY && env.DOUBAO_MODEL) {
       out.push({
         name, call: callOpenAICompat, key: env.DOUBAO_API_KEY,
