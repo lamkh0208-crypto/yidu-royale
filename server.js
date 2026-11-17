@@ -26,6 +26,7 @@ function newCode() {
 // ---------- 速率限制（單 IP） ----------
 const ipState = new Map(); // ip -> {conns, creates:[ts]}
 const MAX_CONNS_PER_IP = Number(process.env.MAX_CONNS_PER_IP) || 8;
+const MAX_CREATES_PER_MIN = Number(process.env.MAX_CREATES_PER_MIN) || 5;
 function ipOf(req) {
   const xf = req.headers['x-forwarded-for'];
   return (xf ? String(xf).split(',')[0].trim() : req.socket.remoteAddress) || 'unknown';
@@ -40,7 +41,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/healthz') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, rooms: rooms.size, ai: ai.providers.map((p) => p.name), aiStats: ai.stats }));
+    return res.end(JSON.stringify({ ok: true, rooms: rooms.size, rssMB: Math.round(process.memoryUsage().rss / 1e6), clients: wss.clients.size, ai: ai.providers.map((p) => p.name), aiStats: ai.stats }));
   }
   const rel = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
   const file = path.join(PUBLIC, path.normalize(rel));
@@ -65,7 +66,8 @@ const server = http.createServer((req, res) => {
 });
 
 // ---------- WebSocket ----------
-const wss = new WebSocketServer({ server, maxPayload: 2048 });
+// 快照是重複性高的 JSON，壓縮後流量約剩一成多，對手機網路比較友善。
+const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: { threshold: 1024, serverNoContextTakeover: true, clientNoContextTakeover: true } });
 
 wss.on('connection', (ws, req) => {
   // 只接受從本站頁面發起的連線（瀏覽器一定會帶 Origin；沒有 Origin 的是測試腳本等非瀏覽器用戶端）。
@@ -109,7 +111,7 @@ wss.on('connection', (ws, req) => {
       let target;
       if (m.t === 'create') {
         info.creates = info.creates.filter((t) => now - t < 60000);
-        if (info.creates.length >= 5) return send({ t: 'error', msg: '開房太頻繁，等一下再試' });
+        if (info.creates.length >= MAX_CREATES_PER_MIN) return send({ t: 'error', msg: '開房太頻繁，等一下再試' });
         info.creates.push(now);
         target = new Room(newCode(), ai);
         rooms.set(target.code, target);

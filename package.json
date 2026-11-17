@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test/sim.js",
-    "eval": "node test/eval.js"
+    "eval": "node test/eval.js",
+    "load": "node test/load.js"
   },
   "engines": { "node": ">=18" },
   "dependencies": { "ws": "^8.18.0" }
