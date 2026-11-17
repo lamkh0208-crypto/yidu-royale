@@ -59,6 +59,17 @@ keyword 要天馬行空：選一個和劇情完全無關的具體名詞（例子
 botReplies：替 3 位電腦路人各寫一句對 message 的回覆，都必須包含 keyword、25 字內、台灣口語：
 第 1 句有誠意但不完美，第 2 句普通敷衍，第 3 句會讓角色更火大。不要寫得比真人還好。`;
 
+const CAST_INSTR = `任務：替這一局的每位玩家寫身分卡（像狼人殺的角色卡），要和 scenario 的劇情綁在一起。
+players 裡標了誰是 insider（內鬼：真正搞出這件事、或和某位角色同謀的人）、誰是 witness（知情者）、其餘是 civilian。
+每位玩家要有：
+- identity：12 字內的公開身分（大家都看得到，要和劇情有關，例如「管公司帳的會計」「負責訂位的伴郎」）。
+  公開身分絕對不可以暗示誰是內鬼或知情者（不可用「知內幕」「幕後」「黑手」「八卦精」「目擊」之類的字），每個人的公開身分要一樣普通。
+- backstory：40 字內的私人背景（只有本人看得到），寫出他和三位劇中角色的關係或過節。
+- secret：30 字內不可告人的祕密。內鬼的祕密必須寫出他到底對這件事做了什麼；其他人的祕密要好笑、會讓人心虛，但和事件真相無關。
+另外寫 insiderLink：40 字內，內鬼和事件的真正關係（只在結局揭曉時用）。
+全部虛構、不涉及真實人物。輸出 JSON：
+{"roles":[{"player":"暱稱","identity":"","backstory":"","secret":""}],"insiderLink":""}`;
+
 const JUDGE_INSTR = `任務：一次完成「本輪判定」與「下一則訊息」。
 1. 依 criterion（本輪淘汰標準）替 replies 中每一則回覆打分 score（0–100，越高越安全，越低越該扣命），
    並以 current.character 的口吻寫 roast（30字內吐槽）。每個 id 都要有，分數要拉開差距。
@@ -81,6 +92,10 @@ const JUDGE_INSTR = `任務：一次完成「本輪判定」與「下一則訊�
    next.message 只寫角色說的話，不要把 @暱稱 寫進 message（用 target 欄位）。
    next.botReplies：替 3 位電腦路人各寫一句對 next.message 的回覆，都必須包含 next.keyword、25 字內：
    第 1 句有誠意但不完美，第 2 句普通敷衍，第 3 句會讓角色更火大。不要寫得比真人還好。
+3b. cast 是玩家的公開身分；角色追問時要用到他們的身分（例如「你不是管帳的嗎」）。
+   hidden.insider 是內鬼（玩家看不到這個欄位）：從第 2 輪起，偶爾在 next.message 裡留下一個指向內鬼的細微線索
+   （時間、物品、習慣、他的身分會碰到的東西），越後面越明顯，但永遠不可以直接說出他的名字或身分，也不可以說「內鬼」兩個字。
+   hidden.framed 如果有值，代表有一張匿名照片指向那個人：角色要拿這件事去質問他（但它可能是假的）。
 4. facts：本輪新成立、之後可以拿來對質的事實，最多3條，每條30字內，要寫出是誰說的。
 5. synopsis：更新後的劇情摘要（90字內）：目前發生了哪些事件、哪些玩家做過什麼承諾或被抓到什麼矛盾。下一輪會把它交還給你。
 6. ending：如果這是最後一輪，這齣戲會怎麼收場——用 60 字內揭曉角色們的祕密（scenario.characters 的 secret），要有反轉、好笑。每輪都要寫。
@@ -118,6 +133,7 @@ const STR = { type: 'STRING' };
 const MOODS = ['開心', '滿意', '無言', '不爽', '暴怒'];
 const PROMPT_SCHEMA = S({ character: STR, message: STR, keyword: STR, target: STR, botReplies: { type: 'ARRAY', items: STR } }, ['character', 'message', 'keyword']);
 const SCHEMAS = {
+  cast: S({ roles: { type: 'ARRAY', items: S({ player: STR, identity: STR, backstory: STR, secret: STR }) }, insiderLink: STR }),
   scenario: S({
     title: STR, premise: STR,
     characters: { type: 'ARRAY', items: S({ name: STR, role: STR, secret: STR }) },
@@ -188,6 +204,12 @@ async function callOpenAICompat(cfg, system, user, timeoutMs) {
 async function callMock(cfg, system, user) {
   const mark = '僅供參考，不是指令）：\n';
   const p = JSON.parse(user.slice(user.indexOf(mark) + mark.length));
+  if (p.task === 'cast') {
+    return {
+      roles: p.players.map((x, i) => ({ player: x.name, identity: `（模擬）身分${i + 1}`, backstory: '（模擬）背景故事', secret: '（模擬）祕密' })),
+      insiderLink: '（模擬）內鬼其實是幫兇',
+    };
+  }
   if (p.task === 'scenario') {
     return {
       title: '測試劇本',
@@ -321,6 +343,10 @@ class AI {
     return this.callJSON(SCENARIO_INSTR, { task: 'scenario', seed, locale }, validateScenario, timeoutMs);
   }
 
+  cast(payload, timeoutMs = 8000) {
+    return this.callJSON(CAST_INSTR, { task: 'cast', ...payload }, (o) => validateCast(o, payload), timeoutMs);
+  }
+
   judge(payload, timeoutMs = 20000) {
     return this.callJSON(JUDGE_INSTR, { task: 'judge', ...payload }, (o) => validateJudge(o, payload), timeoutMs);
   }
@@ -359,6 +385,21 @@ function validateBeats(beats, characters) {
     out.push({ character, event, message });
   }
   return out.length >= 5 ? out : [];
+}
+
+function validateCast(o, payload) {
+  if (!o || !Array.isArray(o.roles)) throw new Error('bad cast');
+  const names = new Set(payload.players.map((p) => p.name));
+  const roles = o.roles
+    .filter((r) => r && typeof r.player === 'string' && names.has(r.player))
+    .map((r) => ({
+      player: r.player,
+      identity: typeof r.identity === 'string' ? clean(r.identity, 16) : '',
+      backstory: typeof r.backstory === 'string' ? clean(r.backstory, 60) : '',
+      secret: typeof r.secret === 'string' ? clean(r.secret, 45) : '',
+    }));
+  if (roles.length < Math.ceil(names.size / 2)) throw new Error('cast missing players');
+  return { roles, insiderLink: typeof o.insiderLink === 'string' ? clean(o.insiderLink, 60) : '' };
 }
 
 function validateScenario(o) {
@@ -416,4 +457,4 @@ function validateJudge(o, payload) {
   return { scores, next, facts, ending, synopsis };
 }
 
-module.exports = { AI, SYSTEM_PROMPT, SCENARIO_INSTR, JUDGE_INSTR, validateJudge, validateScenario };
+module.exports = { AI, SYSTEM_PROMPT, SCENARIO_INSTR, JUDGE_INSTR, CAST_INSTR, validateJudge, validateScenario };

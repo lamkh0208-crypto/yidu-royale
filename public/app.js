@@ -89,8 +89,12 @@
         '角色<b>一則一則已讀</b>，表情和怒氣跟著變。<b>最讓他火大</b>的幾句扣命；已讀不回、漏怪詞直接扣。',
         '每人<b>兩條命</b>，一局<b>五輪</b>。角色記得你說過的話，前後矛盾會被抓包。',
         '出局變<b>亡靈</b>：寫判定詞決定下一輪怎麼扣命，還能<b>附身</b>活人，逼他多用一個怪詞。',
-        '結局會揭曉真相，扣命最多的人成為<b>背鍋俠</b>。',
+        '每個人都有<b>身分卡</b>（🎭）：公開身分、私人背景、祕密。其中一人是<b>內鬼</b>，一人是<b>知情者</b>。',
+        '五輪結束後<b>指證內鬼</b>：抓到了正義勝利；抓錯了，內鬼逃脫，被冤枉的人變成<b>背鍋俠</b>。',
       ],
+      card: { title: '你的身分卡', identity: '公開身分', backstory: '你的背景', secret: '你的祕密（別說出去）', hint: '你知道的事', goal: '你的目標', ok: '我知道了', frameAsk: '🧨 栽贓（一局一次）：選一個人，下一輪會出現對他不利的匿名照片。', framed: (n) => `已栽贓 ${n}，下一輪見分曉。`, tapHint: '點頭像可以看別人的公開身分' },
+      accuseAsk: ['🕵️ 指證時間：', '誰是內鬼？', '（所有人都能投，平手算內鬼逃脫）'], accuseDone: '已指證，等其他人…',
+      caught: (n) => `🕵️ 內鬼 ${n} 被抓到了`, escaped: (n) => `🎭 內鬼 ${n} 逃脫了`, insiderWas: '真正的內鬼', newEvent: '劇情新發展',
       blameAsk: ['🫵 甩鍋時間：', '你猜哪一句會最慘？', '猜中拿護盾 🛡️（不能選自己）'], blameDone: '已經指了，等其他人…',
       blameHint: '活人猜中有護盾；亡靈也可以指，純粹落井下石。',
       stuff: (e, k) => `想辦法把 ${e}「${k}」塞進回覆，塞得越妙分數越高。`,
@@ -101,7 +105,7 @@
       meta: { blames: (n) => `🫵 ${n} 人甩鍋`, shield: '🛡️ 護盾擋下', mob: '眾望所歸', haunt: '沒用亡靈的怪詞 −25', nokw: '沒有怪詞' },
       life: (d) => `−${d} 條命`, outTag: '💀 出局', goat: '🍳 本集背鍋俠',
       shout: { out: '掰掰', rage: '你認真的嗎', win: '太神啦', shield: '有你的' },
-      phase: { LOBBY: '等待開始', INTRO: '對方正在輸入…', ANSWER: '快回訊息！', BLAME: '甩鍋：猜誰最慘', JUDGE: '已讀中…', REVEAL: '公布結果', OVER: '本局結束' },
+      phase: { LOBBY: '等待開始', INTRO: '對方正在輸入…', ANSWER: '快回訊息！', BLAME: '甩鍋：猜誰最慘', JUDGE: '已讀中…', REVEAL: '公布結果', ACCUSE: '指證內鬼', OVER: '本局結束' },
     },
     hk: {
       title: '藍剔唔覆<br>大逃殺', tag: '老細、前度、親戚一齊搵你。<br>覆得最差嗰句，扣一條命。',
@@ -114,8 +118,12 @@
         '角色會<b>逐句藍剔</b>，表情同怒氣跟住變。<b>最激嬲佢</b>嗰幾句扣命；藍剔唔覆、漏咗怪詞即扣。',
         '每人<b>兩條命</b>，一局<b>五輪</b>。角色記得你講過乜，前言不對後語會俾人捉。',
         '出局變<b>亡靈</b>：寫判定詞決定下一輪點扣命，仲可以<b>上身</b>，逼活人用多一個怪詞。',
-        '結局會揭曉真相，扣命最多嗰個就係<b>孭鑊俠</b>。',
+        '每個人都有<b>身分卡</b>（🎭）：公開身分、私人背景、祕密。其中一個係<b>內鬼</b>，一個係<b>知情人</b>。',
+        '五輪完咗之後<b>指證內鬼</b>：捉到就正義得勝；捉錯人，內鬼走甩，俾人冤枉嗰個就係<b>孭鑊俠</b>。',
       ],
+      card: { title: '你張身分卡', identity: '公開身分', backstory: '你嘅背景', secret: '你嘅祕密（唔好講出去）', hint: '你知道嘅嘢', goal: '你嘅目標', ok: '知道喇', frameAsk: '🧨 插贓（一局一次）：揀一個人，下一輪會出現對佢唔利嘅匿名相。', framed: (n) => `已經插咗 ${n} 贓，下一輪見真章。`, tapHint: '㩒頭像可以睇其他人嘅公開身分' },
+      accuseAsk: ['🕵️ 指證時間：', '邊個係內鬼？', '（所有人都可以投，打和當內鬼走甩）'], accuseDone: '指證咗，等埋其他人…',
+      caught: (n) => `🕵️ 內鬼 ${n} 俾人捉到`, escaped: (n) => `🎭 內鬼 ${n} 走甩咗`, insiderWas: '真正嘅內鬼', newEvent: '劇情新發展',
       blameAsk: ['🫵 甩鑊時間：', '你估邊句會最慘？', '估中攞護盾 🛡️（唔可以揀自己）'], blameDone: '指咗喇，等埋其他人…',
       blameHint: '活人估中有護盾；亡靈都可以指，純粹落井下石。',
       stuff: (e, k) => `諗計將 ${e}「${k}」塞入回覆，塞得越妙越高分。`,
@@ -126,7 +134,7 @@
       meta: { blames: (n) => `🫵 ${n} 人甩鑊`, shield: '🛡️ 護盾擋咗', mob: '眾望所歸', haunt: '冇用亡靈個怪詞 −25', nokw: '冇怪詞' },
       life: (d) => `−${d} 條命`, outTag: '💀 出局', goat: '🍳 今集孭鑊俠',
       shout: { out: '拜拜喇', rage: '有冇搞錯呀', win: '好嘢', shield: '醒目喎' },
-      phase: { LOBBY: '等開始', INTRO: '對方輸入緊…', ANSWER: '快啲覆！', BLAME: '甩鑊：估邊個最慘', JUDGE: '藍剔緊…', REVEAL: '開估', OVER: '完場' },
+      phase: { LOBBY: '等開始', INTRO: '對方輸入緊…', ANSWER: '快啲覆！', BLAME: '甩鑊：估邊個最慘', JUDGE: '藍剔緊…', REVEAL: '開估', ACCUSE: '指證內鬼', OVER: '完場' },
     },
   };
   let homeLocale = 'tw';
@@ -268,6 +276,7 @@
     $('phaseLabel').textContent = label;
 
     renderPlayers();
+    renderRoleCard();
     $('rules').hidden = !(S.phase === 'LOBBY' && !S.log.length);
     if (!$('rules').hidden && $('rules').dataset.loc !== S.locale) {
       $('rules').dataset.loc = S.locale;
@@ -307,6 +316,33 @@
     // 底部操作區變高時，最後一則訊息不要被蓋住
     if (log.scrollHeight - log.scrollTop - log.clientHeight < 220) log.scrollTop = log.scrollHeight;
     tick();
+  }
+
+  // 身分卡：開局自動打開一次，之後隨時點 🎭 查看
+  let cardSeen = '';
+  function renderRoleCard(open) {
+    const box = $('roleCard');
+    const r = S && S.myRole;
+    $('btnRole').hidden = !r;
+    if (!r) { box.hidden = true; return; }
+    const key = `${S.code}|${S.scenario ? S.scenario.title : ''}|${r.identity}`;
+    if (cardSeen !== key && S.phase !== 'OVER') { cardSeen = key; open = true; }
+    if (open === true) box.hidden = false;
+    if (box.hidden) return;
+    const c = L().card;
+    const players = S.players.filter((p) => p.identity && p.id !== S.you.id);
+    fill(box, h('div', { class: `card role-${r.role}` },
+      h('div', { class: 'cardHead' }, h('small', {}, c.title), h('b', { class: 'badge' }, r.roleName)),
+      h('div', { class: 'cardRow' }, h('small', {}, c.identity), h('div', { class: 'big' }, r.identity)),
+      h('div', { class: 'cardRow' }, h('small', {}, c.backstory), r.backstory),
+      h('div', { class: 'cardRow secret' }, h('small', {}, c.secret), r.secret),
+      r.hint && h('div', { class: 'cardRow hintRow' }, h('small', {}, c.hint), r.hint),
+      h('div', { class: 'cardRow' }, h('small', {}, c.goal), r.goal),
+      r.canFrame && h('div', { class: 'cardRow' }, h('small', {}, c.frameAsk),
+        h('div', { class: 'chips' }, players.map((p) => h('button', { onclick: () => { send({ t: 'frame', id: p.id }); Sound.play('ghost'); } }, `${p.name}（${p.identity}）`)))),
+      r.framed && h('div', { class: 'cardRow' }, c.framed(r.framed)),
+      h('p', { class: 'hint small' }, c.tapHint),
+      h('button', { class: 'primary', onclick: () => { box.hidden = true; } }, c.ok)));
   }
 
   // 舞台：出題角色的大頭、表情與怒氣值
@@ -358,23 +394,25 @@
     log.append(el);
     if (stick || e.pid === S.you.id) log.scrollTop = log.scrollHeight;
     if (silent) return;
-    if (e.k === 'npc') { Sound.play('msg'); Sound.say(e.text, S.locale); }
+    if (e.k === 'npc') { Sound.play('msg'); Sound.say(e.text, S.locale, e.who, moodOfAnger(S.anger)); }
     else if (e.k === 'reply') {
       // 角色讀到這句回覆：換表情、怒氣值跟著跳
       if (e.mood != null) setStage(e.who, e.mood, shownAnger + MOOD_DELTA[e.mood], true);
       if (e.mood === 4) Sound.play('rage'); else if (e.mood === 0) Sound.play('happy');
       // 語音：出局喊一句、扣命唸吐槽、沒扣命但暴怒也喊一句
-      if (e.out) Sound.say(L().shout.out, S.locale);
-      else if (e.lost) Sound.say(e.roast, S.locale);
-      else if (e.mood === 4) Sound.say(L().shout.rage, S.locale);
+      if (e.out) Sound.say(L().shout.out, S.locale, e.who, 4);
+      else if (e.lost) Sound.say(e.roast, S.locale, e.who, e.mood);
+      else if (e.mood === 4) Sound.say(L().shout.rage, S.locale, e.who, 4);
       Sound.play(e.out ? 'out' : e.lost ? 'lost' : 'pop');
       if (e.lost && e.pid === S.you.id && navigator.vibrate) navigator.vibrate([80, 60, 80]);
     } else if (e.k === 'sys') {
-      if (e.text.startsWith('🏆')) { Sound.play('win'); Sound.say(L().shout.win, S.locale); }
-      else if (e.text.startsWith('🛡️')) Sound.say(L().shout.shield, S.locale);
+      if (e.text.startsWith('🏆')) { Sound.play('win'); Sound.say(L().shout.win, S.locale, S.npc, 0); }
+      else if (e.text.startsWith('🛡️')) Sound.say(L().shout.shield, S.locale, S.npc, 1);
       else if (e.text.startsWith('👻')) Sound.play('ghost');
     }
   }
+
+  const roleLabel = (r) => ({ insider: '內鬼', witness: S.locale === 'hk' ? '知情人' : '知情者', civilian: '路人' }[r] || '');
 
   function renderPlayers() {
     const pending = {};
@@ -385,11 +423,14 @@
         const hurt = shownLives[p.id] != null && lives < shownLives[p.id];
         shownLives[p.id] = lives;
         const canKick = (S.phase === 'LOBBY' || S.phase === 'OVER') && me().host && p.id !== S.you.id && !p.bot;
-        return h('div', { onclick: canKick ? () => confirm(`把「${p.name}」移出房間？`) && send({ t: 'kick', id: p.id }) : null, class: `pl${canKick ? ' kickable' : ''}${p.id === S.you.id ? ' me' : ''}${S.round && !lives ? ' dead' : ''}${p.connected ? '' : ' off'}${hurt ? ' hurt' : ''}` },
+        const onTap = canKick ? () => confirm(`把「${p.name}」移出房間？`) && send({ t: 'kick', id: p.id })
+          : p.identity ? () => toast(`${p.name}：${p.identity}${p.role ? `（${roleLabel(p.role)}）` : ''}`) : null;
+        return h('div', { onclick: onTap, class: `pl${canKick ? ' kickable' : ''}${p.id === S.you.id ? ' me' : ''}${S.round && !lives ? ' dead' : ''}${p.connected ? '' : ' off'}${hurt ? ' hurt' : ''}` },
           p.host && h('span', { class: 'crown' }, '👑'),
           p.bot && h('span', { class: 'botTag' }, '🤖'),
           p.shield && lives > 0 && h('span', { class: 'shieldTag' }, '🛡️'),
           p.haunted && lives > 0 && h('span', { class: 'hauntTag' }, '👻'),
+          p.role === 'insider' && h('span', { class: 'insTag' }, '🎭'),
           p.done && h('span', { class: 'done' }, '✓'),
           avatar(p.hue, p.face),
           h('div', { class: 'hp' }, S.round ? (lives ? '♥'.repeat(lives) : '💀') : ''),
@@ -403,12 +444,14 @@
     if (e.k === 'event') {
       return h('div', { class: 'event' },
         e.kind && h('div', { class: 'evArt' }, Pixel.evidence(e.kind, e.text)),
-        h('div', { class: 'evRow' }, h('span', { class: 'evIcon' }, e.icon || '🎬'), h('div', {}, h('small', {}, '劇情新發展'), e.text)));
+        h('div', { class: 'evRow' }, h('span', { class: 'evIcon' }, e.icon || '🎬'), h('div', {}, h('small', {}, e.title || L().newEvent), e.text)));
     }
     if (e.k === 'ending') {
       return h('div', { class: 'endcard' },
         Pixel.poster(e.names || []),
         h('div', { class: 'endBody' }, h('small', {}, `《${e.title}》結局揭曉`), e.text,
+          e.insider && h('div', { class: `reveal ${e.caught ? 'caught' : 'escaped'}` }, h('small', {}, L().insiderWas),
+            `${e.insider.name}（${e.insider.identity}）`, h('div', { class: 'why' }, e.insider.link || e.insider.secret)),
           e.scapegoat && h('div', { class: 'goat' }, h('small', {}, L().goat), e.scapegoat),
           h('div', { class: 'endNames' }, (e.names || []).join('　·　'))));
     }
@@ -442,7 +485,7 @@
   function renderDock() {
     const my = me();
     const alive = my.lives > 0;
-    const key = [S.phase, S.round, alive, S.myReply, S.myBlame, my.host, JSON.stringify(S.ghost || 0), JSON.stringify(S.haunt || 0), S.players.filter((p) => p.lives > 0).map((p) => p.id + (p.haunted ? 'h' : '')).join(','), S.phase === 'LOBBY' ? S.players.filter((p) => p.connected).length : 0].join('|');
+    const key = [S.phase, S.round, alive, S.myReply, S.myBlame, S.myAccuse, my.host, JSON.stringify(S.ghost || 0), JSON.stringify(S.haunt || 0), S.players.filter((p) => p.lives > 0).map((p) => p.id + (p.haunted ? 'h' : '')).join(','), S.phase === 'LOBBY' ? S.players.filter((p) => p.connected).length : 0].join('|');
     if (key === dockKey) return;
     dockKey = key;
     const dock = $('dock');
@@ -526,13 +569,24 @@
           h('button', { class: `${b.mine ? 'own' : ''}${S.myBlame === b.rid ? ' sel' : ''}`, disabled: b.mine || !!S.myBlame,
             onclick: () => { send({ t: 'blame', rid: b.rid }); Sound.play('vote'); } }, b.mine ? `（你的）${b.text}` : `🫵 ${b.text}`))),
         h('p', { class: 'hint small' }, L().blameHint));
+    } else if (S.phase === 'ACCUSE') {
+      const ask = L().accuseAsk;
+      const cands = S.players.filter((p) => p.identity && p.id !== S.you.id);
+      fill(dock,
+        h('p', { class: 'hint' }, S.myAccuse ? L().accuseDone : h('span', {}, ask[0], h('b', {}, ask[1]), ask[2])),
+        h('div', { class: 'ballot accuse' }, cands.map((p) =>
+          h('button', { class: S.myAccuse === p.id ? 'sel' : '', disabled: !!S.myAccuse || !me().identity,
+            onclick: () => { send({ t: 'accuse', id: p.id }); Sound.play('vote'); } },
+          h('b', {}, `🫵 ${p.name}`), ` ${p.identity}`, p.accused ? ' ✓' : ''))));
     } else if (S.phase === 'OVER' && S.result) {
       const r = S.result;
+      const acc = r.accusation;
       fill(dock, h('div', { class: 'stack result' },
-        h('h2', {}, r.winner ? `🏆 ${r.winner.name} 活到最後` : '無人生還'),
+        acc && h('h2', { class: acc.correct ? 'win' : 'lose' }, acc.correct ? L().caught(acc.insider.name) : L().escaped(acc.insider.name)),
+        h(acc ? 'p' : 'h2', {}, r.winner ? `🏆 ${r.winner.name} 活到最後` : '無人生還'),
         h('p', {}, `《${r.title}》共 ${r.rounds} 輪${r.winner && r.winner.bot ? '｜你們輸給了 AI 路人 🤖' : ''}`),
         r.awards && r.awards.length ? h('div', { class: 'awards' }, r.awards.map((a) => h('div', {}, h('b', {}, `${a.icon} ${a.title}`), ` ${a.name}`, h('small', {}, a.desc)))) : null,
-        h('div', { class: 'rank' }, r.ranking.slice(0, 6).map((x, i) => h('span', { class: x.id === S.you.id ? 'me' : '' }, `${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${x.name}${x.lives ? ' ' + '♥'.repeat(x.lives) : ''}`))),
+        h('div', { class: 'rank' }, r.ranking.slice(0, 6).map((x, i) => h('span', { class: x.id === S.you.id ? 'me' : '' }, `${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${x.name}${x.lives ? ' ' + '♥'.repeat(x.lives) : ''}${(r.roles || []).find((o) => o.name === x.name && o.role === 'insider') ? ' 🎭' : ''}`))),
         h('div', { class: 'two' },
           r.best && h('button', { class: 'ghost', onclick: shareCard }, '🖼 最神回覆卡'),
           h('button', { class: 'ghost', onclick: invite }, '📎 邀請連結')),
@@ -548,14 +602,14 @@
     const left = deadline ? Math.max(0, deadline - Date.now()) : 0;
     const clock = $('clock');
     clock.textContent = deadline ? Math.ceil(left / 1000) : '';
-    clock.className = `clock${left < 10000 && (S.phase === 'ANSWER' || S.phase === 'BLAME') ? ' hot' : ''}`;
+    clock.className = `clock${left < 10000 && (S.phase === 'ANSWER' || S.phase === 'BLAME' || S.phase === 'ACCUSE') ? ' hot' : ''}`;
     $('progress').style.width = deadline && S.total ? `${(left / S.total) * 100}%` : '0';
-    const timed = S.phase === 'ANSWER' || S.phase === 'BLAME';
+    const timed = S.phase === 'ANSWER' || S.phase === 'BLAME' || S.phase === 'ACCUSE';
     const sec = Math.ceil(left / 1000);
     if (timed && deadline && sec <= 5 && sec > 0 && sec !== lastTick) {
       lastTick = sec;
       const my = me();
-      if (S.phase === 'BLAME' ? !S.myBlame : my.lives > 0 && !S.myReply) Sound.play('tick');
+      if (S.phase === 'ACCUSE' ? !S.myAccuse : S.phase === 'BLAME' ? !S.myBlame : my.lives > 0 && !S.myReply) Sound.play('tick');
     }
     if (S.phase === 'ANSWER') Sound.setMood(left < 10000 ? 'panic' : 'tense');
   }
@@ -692,12 +746,13 @@
   $('btnSolo').onclick = () => enter('solo');
   $('code').addEventListener('keydown', (e) => e.key === 'Enter' && enter('join'));
   $('btnCode').onclick = invite;
+  $('btnRole').onclick = () => renderRoleCard(true);
   const SND = ['🔊', '🗣️', '🔔', '🔇'];
   $('btnSound').textContent = SND[Sound.mode];
   $('btnSound').onclick = () => {
     const m = Sound.cycle();
     $('btnSound').textContent = SND[m];
-    toast(['音樂＋音效＋語音', '音效＋語音', '只有音效', '靜音'][m]);
+    toast(['音樂＋音效＋角色碎碎念', '音樂＋音效＋手機語音朗讀', '只有音效', '靜音'][m]);
   };
   // 重新整理後自動回房時還沒有點擊過，第一次觸碰畫面再啟動聲音
   document.addEventListener('pointerdown', () => Sound.init(), { once: true });

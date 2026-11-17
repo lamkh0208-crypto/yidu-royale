@@ -131,6 +131,8 @@ wss.on('connection', (ws, req) => {
     else if (m.t === 'reply') room.reply(player, m.text);
     else if (m.t === 'blame') room.blame(player, String(m.rid || ''));
     else if (m.t === 'haunt') room.haunt(player, String(m.id || ''));
+    else if (m.t === 'frame') room.frame(player, String(m.id || ''));
+    else if (m.t === 'accuse') room.accuse(player, String(m.id || ''));
     else if (m.t === 'emoji') room.emoji(player, String(m.e || ''));
     else if (m.t === 'word') room.word(player, m.text);
     else if (m.t === 'gvote') room.gvote(player, String(m.pid || ''));

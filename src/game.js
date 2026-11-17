@@ -1,10 +1,11 @@
 'use strict';
 // 房間與狀態機。伺服器權威：計時、判定、扣命全部在這裡。
-// LOBBY → INTRO → ANSWER → BLAME → JUDGE → REVEAL → (INTRO … | OVER) → LOBBY
+// LOBBY → INTRO（派身分）→ ANSWER → BLAME → JUDGE → REVEAL → (INTRO … | ACCUSE 指證內鬼 → OVER) → LOBBY
 
 const crypto = require('crypto');
 const { clean, cleanName } = require('./filter');
 const story = require('./story');
+const roles = require('./roles');
 
 const num = (v, d) => (Number.isFinite(Number(v)) && v !== undefined && v !== '' ? Number(v) : d);
 const T = {
@@ -13,6 +14,8 @@ const T = {
   answer: num(process.env.T_ANSWER, 40000),
   blame: num(process.env.T_BLAME !== undefined ? process.env.T_BLAME : process.env.T_VOTE, 12000), // 甩鍋（猜誰最慘）
   judgeMax: num(process.env.T_JUDGE, 12000),
+  cast: num(process.env.T_CAST, 10000),
+  accuse: num(process.env.T_ACCUSE, 25000),
   reveal: num(process.env.T_REVEAL, 0), // 0 = 依回覆數自動計算
 };
 const MIN_PLAYERS = num(process.env.MIN_PLAYERS, 1);
@@ -71,6 +74,12 @@ class Room {
     this.ending = '';
     this.nextCriterion = null; // 亡靈投票選出的下一輪判定詞
     this.pendingHaunts = new Map(); // 被附身的玩家 id -> { by }，下一輪生效
+    this.insider = null; // 內鬼（玩家物件）
+    this.pendingFrame = null; // 內鬼栽贓的對象 id，下一輪生效
+    this.framedId = null;
+    this.accusations = new Map(); // 指證：投票者 id -> 被指證者 id
+    this.accusation = null;
+    this.insiderLink = '';
     for (const p of this.players.values()) p.word = '';
     this.typing = '';
     this.best = null;
@@ -172,7 +181,9 @@ class Room {
       emojis: EMOJIS,
       players: [...this.players.values()].map((x) => ({
         id: x.id, name: x.name, hue: x.hue, face: x.face, lives: x.lives, host: x.host, connected: x.connected, bot: !!x.bot,
-        shield: !!x.shield, haunted: this.pendingHaunts.has(x.id),
+        shield: !!x.shield, haunted: this.pendingHaunts.has(x.id), identity: x.identity || '',
+        role: this.phase === 'OVER' ? x.role || '' : '',
+        accused: this.phase === 'ACCUSE' && this.accusations.has(x.id),
         done: !!c && ((this.phase === 'ANSWER' && c.replies.has(x.id)) || (this.phase === 'BLAME' && c.blames.has(x.id))),
       })),
       scenario: this.scenario && { title: this.scenario.title, premise: this.scenario.premise,
@@ -180,6 +191,17 @@ class Room {
       log: this.log,
       result: this.result,
     };
+    if (p.played && p.role) {
+      const R = roles.text(this.locale);
+      const ft = p.framed ? this.players.get(this.framedId || this.pendingFrame) : null;
+      s.myRole = {
+        role: p.role, roleName: R.roleName[p.role], goal: R.goal[p.role],
+        identity: p.identity, backstory: p.backstory, secret: p.secret, hint: p.hint || '',
+        canFrame: p.role === 'insider' && !p.framed && !['LOBBY', 'ACCUSE', 'OVER'].includes(this.phase),
+        framed: ft ? ft.name : '',
+      };
+    }
+    if (this.phase === 'ACCUSE') s.myAccuse = this.accusations.get(p.id) || '';
     if (this.isGhost(p)) {
       const cands = [...this.players.values()].filter((x) => x.word && this.isGhost(x));
       s.ghost = {
@@ -258,6 +280,9 @@ class Room {
       x.stats = { ghosts: 0, rages: 0, lost: 0, n: 0, hits: 0 };
       x.lastBody = '';
       x.shield = false;
+      x.role = '';
+      x.identity = '';
+      x.hint = '';
     }
     this.typing = '編劇';
     this.setPhase('INTRO', 0);
@@ -298,7 +323,93 @@ class Room {
     this.sys(this.scenario.premise);
     this.sys(this.L.TXT.cast(this.scenario.characters.map((c) => `${c.name}（${c.role}）`).join('、')));
     if (this.mode === 'vote') this.sys(this.L.TXT.noAI);
+    await this.dealRoles();
+    if (g !== this.gen) return;
     this.beginRound(first);
+  }
+
+  // 派身分：先用保底內容發好，AI 有空就在幾秒內把身分卡改寫成和劇情綁在一起的版本。
+  async dealRoles() {
+    const R = roles.text(this.locale);
+    const cast = [...this.players.values()].filter((p) => p.played);
+    this.insider = roles.deal(cast, this.locale, this.scenario.title).insider;
+    if (this.ai.enabled) {
+      this.typing = '編劇';
+      this.broadcast();
+      const res = await Promise.race([
+        this.ai.cast({
+          locale: this.locale,
+          scenario: { title: this.scenario.title, premise: this.scenario.premise, characters: this.scenario.characters },
+          players: cast.map((p) => ({ name: p.name, role: p.role })),
+        }, T.cast).catch(() => null),
+        sleep(T.cast + 300).then(() => null),
+      ]);
+      if (res && roles.applyCast(cast, res)) this.insiderLink = res.insiderLink || '';
+    }
+    this.sys(R.dealt);
+    this.sys(R.roster(cast.map((p) => `${p.name}（${p.identity}）`).join('、')));
+  }
+
+  // 內鬼栽贓：一局一次，指定一個人，下一輪會出現對他不利的匿名證據。
+  frame(p, targetId) {
+    const t = this.players.get(targetId);
+    if (p !== this.insider || p.framed || !t || t === p || !t.played) return;
+    if (this.phase === 'LOBBY' || this.phase === 'ACCUSE' || this.phase === 'OVER') return;
+    p.framed = true;
+    this.pendingFrame = t.id;
+    this.broadcast();
+  }
+
+  // 指證內鬼：所有參賽者（包括亡靈與 AI 路人）各投一票。
+  openAccuse() {
+    const R = roles.text(this.locale);
+    this.typing = '';
+    this.accusations = new Map();
+    this.sys(R.accuseOpen);
+    this.setPhase('ACCUSE', T.accuse, () => this.closeAccuse());
+    this.broadcast();
+    // AI 路人：有三成五的機會「推理」出內鬼，其餘亂指；內鬼路人會去指被栽贓的人或隨便一個人。
+    const g = this.gen;
+    const cast = [...this.players.values()].filter((x) => x.played);
+    for (const b of cast.filter((x) => x.bot)) {
+      const others = cast.filter((x) => x !== b);
+      let target;
+      if (b === this.insider) target = others.find((x) => x.id === this.framedId) || story.pick(others);
+      else target = Math.random() < 0.35 ? this.insider : story.pick(others);
+      setTimeout(() => g === this.gen && this.accuse(b, target.id), T.accuse * (0.15 + Math.random() * 0.35));
+    }
+    this.checkEarly();
+  }
+
+  accuse(p, targetId) {
+    const t = this.players.get(targetId);
+    if (this.phase !== 'ACCUSE' || !p.played || this.accusations.has(p.id) || !t || t === p || !t.played) return;
+    this.accusations.set(p.id, t.id);
+    this.broadcast();
+    this.checkEarly();
+  }
+
+  closeAccuse() {
+    if (this.phase !== 'ACCUSE') return;
+    const R = roles.text(this.locale);
+    const tally = new Map();
+    for (const id of this.accusations.values()) tally.set(id, (tally.get(id) || 0) + 1);
+    const max = Math.max(0, ...tally.values());
+    const top = [...tally.entries()].filter(([, n]) => n === max).map(([id]) => this.players.get(id));
+    const accused = max > 0 && top.length === 1 ? top[0] : null; // 平手就沒有人被指證，內鬼逃脫
+    const ins = this.insider;
+    const correct = !!accused && accused === ins;
+    const detectives = [...this.accusations.entries()]
+      .filter(([v, t]) => t === ins.id && !this.players.get(v).bot).map(([v]) => this.players.get(v).name);
+    this.accusation = {
+      insider: { id: ins.id, name: ins.name, identity: ins.identity },
+      accused: accused ? { id: accused.id, name: accused.name, identity: accused.identity, votes: max } : null,
+      correct, detectives,
+      votes: [...tally.entries()].map(([id, n]) => ({ id, name: this.players.get(id).name, n })).sort((a, b) => b.n - a.n),
+    };
+    if (!accused) this.sys(R.tie);
+    this.sys(correct ? R.caught(ins.name, ins.identity) : R.escaped(ins.name, ins.identity, accused && accused !== ins ? accused.name : ''));
+    this.finish();
   }
 
   // 第 round 輪預定的劇情節點。決賽或最後一輪直接跳到最後一個節點（攤牌）。
@@ -383,6 +494,23 @@ class Room {
     this.typing = '';
     this.sys(`${this.L.TXT.round(this.round, MAX_ROUNDS)}｜本輪標準：${c.criterion.name}`);
     for (const [pid, h] of c.haunts) this.sys(this.L.TXT.haunt(h.byName, this.players.get(pid).name, h.word));
+    const R = roles.text(this.locale);
+    // 內鬼栽贓：上一輪指定的人，這一輪出現一張「匿名照片」。玩家分不出真假。
+    if (this.pendingFrame && this.players.get(this.pendingFrame)) {
+      const t = this.players.get(this.pendingFrame);
+      c.framed = t.name;
+      this.framedId = t.id;
+      this.log.push({ k: 'event', text: R.frame(t.identity), icon: '📷', kind: 'photo', title: R.clueTitle });
+      this.pendingFrame = null;
+    }
+    // 真線索：第 3 輪給出內鬼和另一個人的身分，二選一
+    if (this.round === 3 && this.insider) {
+      const other = story.pick([...this.players.values()].filter((x) => x.played && x !== this.insider));
+      if (other) {
+        const pair = shuffle([this.insider.identity, other.identity]);
+        this.log.push({ k: 'event', text: R.clue(pair[0], pair[1]), icon: '🔍', kind: 'cctv', title: R.clueTitle });
+      }
+    }
     if (c.event) this.log.push({ k: 'event', text: c.event, icon: story.eventEmoji(c.event), kind: story.eventKind(c.event) });
     this.log.push({ k: 'npc', who: c.character, text: c.message, keyword: c.keyword, kwEmoji: this.L.keywordEmoji(c.keyword), target: c.target });
     this.setPhase('ANSWER', T.answer, () => this.closeAnswer());
@@ -539,6 +667,9 @@ class Room {
         return c.ballot.some((b) => b.pid !== p.id); // 有得選才算
       });
       if (!waiting.length) this.closeBlame();
+    } else if (this.phase === 'ACCUSE') {
+      const waiting = this.humans.filter((p) => p.played && !this.accusations.has(p.id));
+      if (!waiting.length) this.closeAccuse();
     }
   }
 
@@ -570,6 +701,8 @@ class Room {
         recentTargets: this.targets.slice(-2),
         usedKeywords: [...this.usedKeywords],
         story: { synopsis: this.synopsis || this.scenario.premise, nextBeat: this.beatFor(this.round + 1, false) },
+        cast: [...this.players.values()].filter((x) => x.played).map((x) => ({ name: x.name, identity: x.identity })),
+        hidden: this.insider ? { insider: `${this.insider.name}（${this.insider.identity}）`, framed: c.framed || '' } : {},
         current: { character: c.character, message: c.message, keyword: c.keyword },
         replies: c.ballot.map((b) => ({ id: b.rid, player: this.players.get(b.pid).name, text: b.text })),
       };
@@ -754,7 +887,7 @@ class Room {
     const over = this.alive.length <= 1 || this.round >= MAX_ROUNDS || !this.alive.some((p) => !p.bot);
     if (!over) this.botHaunts();
     const ms = T.reveal || Math.min(24000, 5500 + 1500 * c.aliveIds.length);
-    this.setPhase('REVEAL', ms, () => (over ? this.finish() : this.beginRound(this.nextPrompt)));
+    this.setPhase('REVEAL', ms, () => (over ? (this.insider ? this.openAccuse() : this.finish()) : this.beginRound(this.nextPrompt)));
     this.broadcast();
   }
 
@@ -770,8 +903,21 @@ class Room {
     const awards = [];
     const give = (key, p, ...args) => { const [icon, title, desc] = TXT.awards[key]; awards.push({ icon, title, name: p.name, desc: desc(...args) }); };
     // 背鍋俠：整局扣命最多的真人。結局會寫成由他扛下所有責任。
-    const goat = top((p) => p.stats.lost);
-    if (goat) give('scapegoat', goat, goat.stats.lost);
+    // 背鍋俠：被指證的人（抓到內鬼就是內鬼本人，抓錯就是被冤枉的那位）；沒有指證結果才看扣命最多的人。
+    const acc = this.accusation;
+    const accusedP = acc && acc.accused ? this.players.get(acc.accused.id) : null;
+    const goat = accusedP || top((p) => p.stats.lost);
+    const R = roles.text(this.locale);
+    if (accusedP) awards.push({ icon: TXT.awards.scapegoat[0], title: TXT.awards.scapegoat[1], name: accusedP.name, desc: R.accusedDesc(acc.accused.votes) });
+    else if (goat && goat.stats) give('scapegoat', goat, goat.stats.lost);
+    if (acc && !acc.correct && !this.insider.bot) {
+      const [icon, title, desc] = R.awardActor;
+      awards.unshift({ icon, title, name: this.insider.name, desc: desc() });
+    }
+    if (acc && acc.correct && acc.detectives.length) {
+      const [icon, title, desc] = R.awardDetective;
+      awards.unshift({ icon, title, name: acc.detectives.join('、'), desc: desc(acc.detectives.length) });
+    }
     const ghost = top((p) => p.stats.ghosts);
     if (ghost) give('ghost', ghost, ghost.stats.ghosts);
     const rage = top((p) => p.stats.rages);
@@ -781,13 +927,16 @@ class Room {
     const safe = top((p) => (p.stats.n >= 2 ? p.stats.n - p.stats.lost : 0));
     if (safe && safe !== goat) give('safe', safe, safe.stats.n, safe.stats.lost);
     this.result = { winner: ranking[0] || null, ranking, best: this.best, title: this.scenario.title, rounds: this.round, awards,
-      anger: this.anger, scapegoat: goat ? goat.name : '' };
+      anger: this.anger, scapegoat: goat ? goat.name : '', accusation: this.accusation,
+      roles: [...this.players.values()].filter((p) => p.played && p.role).map((p) => ({ name: p.name, role: p.role, identity: p.identity, secret: p.secret })) };
     // 結局：揭曉角色祕密，再把鍋交給背鍋俠。AI 有寫就用 AI 的，否則用劇本設定組出來。
     const ending = this.ending
       || this.scenario.characters.filter((c) => c.secret).map((c) => `${c.name}：${c.secret}`).join('；');
     if (ending) {
       this.log.push({ k: 'ending', text: ending, title: this.scenario.title, names: this.scenario.characters.map((c) => c.name),
-        scapegoat: goat ? TXT.scapegoat(goat.name) : '' });
+        scapegoat: goat ? TXT.scapegoat(goat.name) : '',
+        insider: this.insider ? { name: this.insider.name, identity: this.insider.identity, link: this.insiderLink, secret: this.insider.secret } : null,
+        caught: !!(this.accusation && this.accusation.correct) });
     }
     if (ranking[0]) this.sys(TXT.winner(ranking[0].name));
     this.current = null;

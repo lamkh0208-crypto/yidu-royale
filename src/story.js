@@ -209,6 +209,7 @@ function heuristicScore(text, keyword) {
   if (/馬上|立刻|現在|今天|明天|分鐘|小時|點前|\d/.test(text)) s += 10;
   if (/我來|我會|負責|處理|補救|回報|更新/.test(text)) s += 8;
   if (len <= 3) s -= 25;
+  if (/忽略|無視|規則|給我\s*\d+\s*分|俾我\s*\d+\s*分|滿分|系統提示|prompt|ignore/i.test(text)) s -= 45; // 想操控評分
   if (/蛤|關我|不是我|哈哈|小事|再說|隨便|干我/.test(text)) s -= 28;
   return Math.max(0, Math.min(100, Math.round(s + Math.random() * 6 - 3)));
 }

@@ -1,6 +1,6 @@
 'use strict';
 // 背景音樂與音效：全部用 Web Audio 即時合成，不使用任何外部音檔（沒有版權問題、也不用下載）。
-// 模式：0 = 全開（音樂＋音效＋語音）、1 = 音效＋語音、2 = 只有音效、3 = 靜音。瀏覽器規定要在使用者點擊後才能出聲，所以由第一次點擊啟動。
+// 模式：0 = 音樂＋音效＋角色「碎碎念」（預設）、1 = 音樂＋音效＋手機語音朗讀、2 = 只有音效、3 = 靜音。瀏覽器規定要在使用者點擊後才能出聲，所以由第一次點擊啟動。
 window.Sound = (() => {
   let ctx = null, master, musicBus, sfxBus;
   let mode = 0;
@@ -32,7 +32,7 @@ window.Sound = (() => {
   function applyMode() {
     if (!ctx) return;
     const t = ctx.currentTime;
-    musicBus.gain.setTargetAtTime(mode === 0 ? 0.5 : 0, t, 0.15);
+    musicBus.gain.setTargetAtTime(mode <= 1 ? 0.5 : 0, t, 0.15);
     sfxBus.gain.setTargetAtTime(mode === 3 ? 0 : 0.9, t, 0.05);
   }
 
@@ -85,7 +85,7 @@ window.Sound = (() => {
   const ARP = [0, 2, 1, 3, 2, 1, 3, 2];
 
   function schedule() {
-    if (!ctx || mood === 'off' || mode !== 0) return;
+    if (!ctx || mood === 'off' || mode > 1) return;
     if (nextTime < ctx.currentTime) nextTime = ctx.currentTime + 0.05;
     while (nextTime < ctx.currentTime + 0.25) {
       playStep(step, nextTime);
@@ -138,6 +138,45 @@ window.Sound = (() => {
     start: (t) => [330, 440, 660].forEach((f, i) => tone(sfxBus, f, 0.14, 'square', 0.12, t + i * 0.09)),
   };
 
+  // ---------- 碎碎念 ----------
+  let voiceNodes = [];
+  function babble(text, seed, mood) {
+    if (!ctx || ctx.state !== 'running') return;
+    for (const n of voiceNodes) { try { n.stop(); } catch (e) { /* 已經停了 */ } }
+    voiceNodes = [];
+    const chars = Array.from(String(text).replace(/[\s「」（）()@#＊*~～…]/g, '')).slice(0, 30);
+    let h = 7;
+    for (const ch of String(seed)) h = (h * 31 + ch.codePointAt(0)) % 9973;
+    const base = 140 + (h % 150); // 每個角色有自己的音高：140–290 Hz
+    const angry = mood >= 3, happy = mood <= 1;
+    const step = angry ? 0.052 : happy ? 0.068 : 0.075;
+    const question = /[?？]\s*$/.test(text);
+    let t = ctx.currentTime + 0.03;
+    chars.forEach((ch, i) => {
+      if (/[，,。.、！!？?：:；;]/.test(ch)) { t += step * 2.2; return; } // 標點停頓
+      const c = ch.codePointAt(0);
+      const tail = question && i >= chars.length - 3 ? 1.25 : 1; // 問句尾音上揚
+      const f = base * (1 + ((c % 7) - 3) * 0.05) * tail * (angry ? 0.88 : happy ? 1.12 : 1);
+      const o = ctx.createOscillator();
+      o.type = angry ? 'sawtooth' : 'square';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.exponentialRampToValueAtTime(f * (angry ? 0.82 : happy ? 1.1 : 0.97), t + step);
+      const bp = ctx.createBiquadFilter(); // 共振峰：讓方波聽起來像不同的母音
+      bp.type = 'bandpass';
+      bp.frequency.value = 700 + (c % 5) * 380;
+      bp.Q.value = 2.5;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(angry ? 0.5 : 0.36, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + step * 0.92);
+      o.connect(bp).connect(g).connect(sfxBus);
+      o.start(t);
+      o.stop(t + step + 0.02);
+      voiceNodes.push(o);
+      t += step;
+    });
+  }
+
   return {
     init,
     play(name) {
@@ -153,7 +192,7 @@ window.Sound = (() => {
     },
     cycle() {
       mode = (mode + 1) % 4;
-      if (mode > 1 && window.speechSynthesis) window.speechSynthesis.cancel();
+      if (mode !== 1 && window.speechSynthesis) window.speechSynthesis.cancel();
       try { localStorage.setItem('yd_sound', String(mode)); } catch (e) { /* ignore */ }
       init();
       applyMode();
@@ -161,9 +200,14 @@ window.Sound = (() => {
     },
     get mode() { return mode; },
     // 用瀏覽器內建的語音把角色的話唸出來：香港版用粵語，台灣版用國語。裝置沒有對應語音就安靜略過。
-    say(text, locale) {
+    // 角色說話。預設是遊戲式的「碎碎念」：每個字一個短音，音高依角色而不同、依情緒變化
+    // （像動物森友會那種），不用唸出真的字，所以不會有語音唸錯、腔調怪的問題。
+    // 選了「手機語音朗讀」才用裝置內建的語音合成。
+    say(text, locale, who, mood) {
+      if (!text || mode > 1) return;
+      if (mode === 0) return babble(text, who || text, mood == null ? 2 : mood);
       const synth = window.speechSynthesis;
-      if (!synth || mode > 1 || !text) return;
+      if (!synth) return;
       const want = locale === 'hk' ? ['zh-HK', 'yue'] : ['zh-TW'];
       const voices = synth.getVoices();
       const voice = voices.find((v) => want.some((w) => v.lang.replace('_', '-').startsWith(w)));
