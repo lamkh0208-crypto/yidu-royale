@@ -16,23 +16,26 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!ai.enabled) return console.log('請先設定 AI_PROVIDERS 與金鑰');
   let lib = [];
   try { lib = JSON.parse(fs.readFileSync(OUT, 'utf8')); } catch (e) { /* 第一次執行 */ }
-  const titles = new Set(lib.map((x) => x.title));
-  const count = {};
-  for (const x of lib) count[x.seed] = (count[x.seed] || 0) + 1;
+  const hasBeats = (x) => Array.isArray(x.beats) && x.beats.length >= 6;
+  const titles = new Set(lib.filter(hasBeats).map((x) => x.title)); // 只避開已有故事線的劇名
+  const good = (seed) => lib.filter((x) => x.seed === seed && hasBeats(x)).length;
 
   for (let round = 0; round < PER_SEED; round++) {
     for (const seed of story.SEEDS) {
-      if ((count[seed] || 0) > round) continue; // 這個種子已經夠了（可中斷後續跑）
+      if (good(seed) > round) continue; // 這個種子已經夠了（可中斷後續跑）
       try {
-        const avoid = lib.filter((x) => x.seed === seed).map((x) => x.title).join('、');
-        const sc = await ai.scenario(avoid ? `${seed}（請寫出和這些不同的角度：${avoid}）` : seed, 20000);
-        const ok = sc.characters.length === 3 && sc.first.botReplies.length === 3 && !titles.has(sc.title);
-        if (!ok) { console.log('略過（不完整或重複）：', sc.title); continue; }
-        lib.push({ seed, title: sc.title, premise: sc.premise, characters: sc.characters, first: sc.first });
+        const avoid = lib.filter((x) => x.seed === seed && hasBeats(x)).map((x) => x.title).join('、');
+        const sc = await ai.scenario(avoid ? `${seed}（請寫出和這些不同的角度：${avoid}）` : seed, 30000);
+        const ok = sc.characters.length === 3 && sc.first.botReplies.length === 3 && hasBeats(sc) && !titles.has(sc.title);
+        if (!ok) { console.log('略過（不完整或重複）：', sc.title, (sc.beats || []).length); continue; }
+        // 新的有故事線；同一個種子若還有沒故事線的舊劇本，汰換掉一個。
+        let old = lib.findIndex((x) => x.title === sc.title && !hasBeats(x)); // 同名的舊劇本優先汰換
+        if (old < 0) old = lib.findIndex((x) => x.seed === seed && !hasBeats(x));
+        if (old >= 0) lib.splice(old, 1);
+        lib.push({ seed, title: sc.title, premise: sc.premise, characters: sc.characters, first: sc.first, beats: sc.beats });
         titles.add(sc.title);
-        count[seed] = (count[seed] || 0) + 1;
         fs.writeFileSync(OUT, JSON.stringify(lib, null, 1));
-        console.log(`${lib.length}. 《${sc.title}》${sc.premise}`);
+        console.log(`${lib.filter(hasBeats).length}/${lib.length}. 《${sc.title}》${sc.beats.map((b) => b.event).join(' → ')}`);
       } catch (e) {
         console.log('失敗：', e.message);
       }

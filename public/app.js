@@ -244,6 +244,8 @@
     $('typing').hidden = !S.typing;
     $('typingName').textContent = S.typing;
     renderDock();
+    // 底部操作區變高時，最後一則訊息不要被蓋住
+    if (log.scrollHeight - log.scrollTop - log.clientHeight < 220) log.scrollTop = log.scrollHeight;
     tick();
   }
 
@@ -331,12 +333,13 @@
 
   function renderEntry(e) {
     if (e.k === 'sys') return h('div', { class: 'sys' }, e.text);
+    if (e.k === 'event') return h('div', { class: 'event' }, h('span', { class: 'evIcon' }, e.icon || '🎬'), h('div', {}, h('small', {}, '劇情新發展'), e.text));
     if (e.k === 'npc') {
       return h('div', { class: 'msg npc' }, avatar(hueOf(e.who), 0, true),
         h('div', { class: 'body' },
           h('div', { class: 'who' }, e.who),
           h('div', { class: 'bubble' }, e.target && h('span', { class: 'at' }, `@${e.target} `), e.text),
-          h('div', {}, h('span', { class: 'kw' }, `回覆必須包含「${e.keyword}」`), h('span', { class: 'read' }))
+          h('div', { class: 'kwRow' }, e.kwEmoji && h('span', { class: 'sticker' }, e.kwEmoji), h('span', { class: 'kw' }, `回覆必須包含「${e.keyword}」`), h('span', { class: 'read' }))
         ));
     }
     const mine = e.pid === S.you.id;
@@ -420,7 +423,7 @@
       input.addEventListener('keydown', (ev) => ev.key === 'Enter' && !ev.isComposing && submit());
       upd();
       fill(dock, 
-        h('p', { class: 'hint' }, `本輪標準：`, h('b', {}, S.criterion.name), `（${S.criterion.desc}）`),
+        h('p', { class: 'hint' }, `本輪標準：`, h('b', {}, S.criterion.name), `（${S.criterion.desc}）`, h('br'), `想辦法把 ${S.kwEmoji || ''}「${S.keyword}」塞進回覆，塞得越妙分數越高。`),
         h('div', { class: 'row' }, input, h('button', { onclick: submit }, '送出')), count);
       input.focus();
     } else if (S.phase === 'ANSWER') {

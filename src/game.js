@@ -64,6 +64,7 @@ class Room {
     this.nextPrompt = null;
     this.targets = [];
     this.usedKeywords = new Set();
+    this.synopsis = '';
     this.anger = 20; // 出題角色群的怒氣值 0–100，會影響表情、音樂與 AI 語氣
     this.ending = '';
     this.nextCriterion = null; // 亡靈投票選出的下一輪判定詞
@@ -191,6 +192,7 @@ class Room {
       s.criterion = c.criterion;
       s.npc = c.character;
       s.keyword = c.keyword;
+      s.kwEmoji = story.keywordEmoji(c.keyword);
       s.replyMax = REPLY_MAX;
       s.myReply = c.replies.get(p.id)?.text || '';
       if (this.phase === 'VOTE') {
@@ -271,13 +273,15 @@ class Room {
     let first;
     if (sc) {
       this.mode = 'ai';
-      this.scenario = { title: sc.title, premise: sc.premise, characters: sc.characters, fallback: null };
+      this.scenario = { title: sc.title, premise: sc.premise, characters: sc.characters, beats: sc.beats || [] };
       first = { ...sc.first, live: !!sc.live };
     } else {
       const fb = story.pick(story.FALLBACK_STORIES);
       // 劇本用手寫的保底，但每一輪仍會嘗試 AI 判定；AI 一恢復就接手後續劇情。
       this.mode = this.ai.enabled ? 'ai' : 'vote';
-      this.scenario = { title: fb.title, premise: fb.premise, characters: fb.characters, fallback: fb };
+      // 手寫劇本本來就是完整的八輪故事線
+      const beats = fb.rounds.slice(1).map((r) => ({ character: r.who, event: r.event || '', message: r.text }));
+      this.scenario = { title: fb.title, premise: fb.premise, characters: fb.characters, beats, opening: fb.rounds[0] };
       first = this.fallbackPrompt(0);
     }
     this.sys(`📺 本集：《${this.scenario.title}》`);
@@ -289,23 +293,30 @@ class Room {
     this.beginRound(first);
   }
 
+  // 第 round 輪預定的劇情節點。決賽或最後一輪直接跳到最後一個節點（攤牌）。
+  beatFor(round, final) {
+    const beats = this.scenario.beats || [];
+    if (!beats.length) return null;
+    if (final || round >= MAX_ROUNDS) return beats[beats.length - 1];
+    return beats[Math.min(round - 2, beats.length - 1)] || null;
+  }
+
+  // AI 不可用時的下一題：照故事線走，沒有故事線才用通用追問。idx = 已完成的輪數。
   fallbackPrompt(idx) {
-    const fb = this.scenario.fallback;
     let prm;
-    if (fb) {
-      const r = fb.rounds[idx % fb.rounds.length];
-      prm = { character: r.who, message: r.text, keyword: r.keyword, target: '' };
+    const op = this.scenario.opening;
+    const beat = idx > 0 ? this.beatFor(idx + 1, this.alive.length <= 2) : null;
+    if (idx === 0 && op) {
+      prm = { character: op.who, message: op.text, keyword: op.keyword, target: '' };
+    } else if (beat) {
+      prm = { character: beat.character, message: beat.message, keyword: '', target: '', event: beat.event };
     } else {
       const ch = story.pick(this.scenario.characters);
-      prm = {
-        character: ch.name,
-        message: story.GENERIC_LINES[idx % story.GENERIC_LINES.length],
-        keyword: story.pick(story.KEYWORD_POOL),
-        target: '',
-      };
+      prm = { character: ch.name, message: story.GENERIC_LINES[idx % story.GENERIC_LINES.length], keyword: '', target: '' };
     }
-    // 保底模式每三輪點名一位存活玩家，讓每個人都有戲。
-    if (idx > 0 && idx % 3 === 2 && this.alive.length > 1) prm.target = story.pick(this.alive).name;
+    // 保底模式每三輪點名一位存活的真人，讓每個人都有戲。
+    const people = this.alive.filter((p) => !p.bot);
+    if (idx > 0 && idx % 3 === 2 && people.length) prm.target = story.pick(people).name;
     return prm;
   }
 
@@ -331,6 +342,7 @@ class Room {
       keyword: prompt.keyword,
       target: target ? target.name : '',
       botReplies: prompt.botReplies || [],
+      event: prompt.event || '',
       criterion,
       final,
       aliveIds: this.alive.map((p) => p.id),
@@ -350,7 +362,8 @@ class Room {
     const c = this.current;
     this.typing = '';
     this.sys(`第 ${this.round} 輪${c.final ? '（決賽）' : ''}｜本輪標準：${c.criterion.name}`);
-    this.log.push({ k: 'npc', who: c.character, text: c.message, keyword: c.keyword, target: c.target });
+    if (c.event) this.log.push({ k: 'event', text: c.event, icon: story.eventEmoji(c.event) });
+    this.log.push({ k: 'npc', who: c.character, text: c.message, keyword: c.keyword, kwEmoji: story.keywordEmoji(c.keyword), target: c.target });
     this.setPhase('ANSWER', T.answer, () => this.closeAnswer());
     this.broadcast();
     this.scheduleBots();
@@ -524,6 +537,7 @@ class Room {
         lives: Object.fromEntries(this.alive.map((p) => [p.name, p.lives])),
         recentTargets: this.targets.slice(-2),
         usedKeywords: [...this.usedKeywords],
+        story: { synopsis: this.synopsis || this.scenario.premise, nextBeat: this.beatFor(this.round + 1, false) },
         current: { character: c.character, message: c.message, keyword: c.keyword },
         replies: c.ballot.map((b) => ({ id: b.rid, player: this.players.get(b.pid).name, text: b.text })),
       };
@@ -679,7 +693,9 @@ class Room {
     });
     if (aiOK) this.facts = this.facts.concat(verdict.facts).slice(-15);
     if (aiOK && verdict.ending) this.ending = verdict.ending;
-    this.nextPrompt = aiOK && verdict.next ? { ...verdict.next, live: true } : this.fallbackPrompt(this.round);
+    if (aiOK && verdict.synopsis) this.synopsis = verdict.synopsis;
+    const nb = this.beatFor(this.round + 1, this.alive.length <= 2);
+    this.nextPrompt = aiOK && verdict.next ? { ...verdict.next, live: true, event: nb ? nb.event : '' } : this.fallbackPrompt(this.round);
 
     // 真人全滅就結束，不用看電腦互打。
     const over = this.alive.length <= 1 || this.round >= MAX_ROUNDS || !this.alive.some((p) => !p.bot);

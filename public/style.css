@@ -184,3 +184,14 @@ footer { background: var(--panel); border-top: 1px solid var(--line); padding: 1
 .page a { color: var(--accent); }
 #home { justify-content: flex-start; overflow-y: auto; }
 #home .home-card { margin: auto 0; }
+
+/* 劇情事件卡 */
+.event { align-self: stretch; margin: 6px 4px 0; padding: 8px 12px; border-radius: 12px; background: linear-gradient(90deg, #2a2410, #1a2027); border-left: 4px solid var(--accent); font-weight: 700; animation: slam .35s cubic-bezier(.2, 1.4, .4, 1); }
+.event small { display: block; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: 1px; }
+
+.event { display: flex; align-items: center; gap: 10px; }
+.evIcon { font-size: 30px; line-height: 1; filter: drop-shadow(0 2px 4px #0008); }
+.kwRow { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.kwRow .kw { margin-top: 0; }
+.sticker { font-size: 34px; line-height: 1; display: inline-block; animation: sticker .5s cubic-bezier(.2, 1.8, .4, 1); transform: rotate(-8deg); }
+@keyframes sticker { from { transform: scale(0) rotate(-40deg); } }

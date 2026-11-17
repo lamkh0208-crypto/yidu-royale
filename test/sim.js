@@ -86,6 +86,7 @@ async function runGame(label, env, port) {
     const ai = env.AI_PROVIDERS === 'mock';
     for (const ph of ['INTRO', 'ANSWER', ai ? 'JUDGE' : 'VOTE', 'REVEAL', 'OVER']) if (!stats.phases.has(ph)) fail.push(`沒經過 ${ph} 階段`);
     if (ai && stats.phases.has('VOTE')) fail.push('AI 模式不應該出現投票階段');
+    if (s.log.filter((e) => e.k === 'event').length < 4) fail.push('劇情事件太少，故事線沒有推進');
     if (!s.log.some((e) => e.k === 'reply' && e.mood >= 0 && e.mood <= 4)) fail.push('回覆沒有帶情緒');
     if (!(s.anger > 20)) fail.push(`怒氣值沒有上升（${s.anger}）`);
     if (!s.log.some((e) => e.k === 'sys' && /亡靈投票決定/.test(e.text))) fail.push('亡靈判定詞沒有生效');
