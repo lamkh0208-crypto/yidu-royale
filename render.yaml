@@ -12,10 +12,8 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: AI_PROVIDERS
-        value: gemini,deepseek,openrouter
+        value: gemini,openrouter
       - key: GEMINI_API_KEY
         sync: false # 部署時在 Render 介面填入，不會進 repo
-      - key: DEEPSEEK_API_KEY
-        sync: false
       - key: OPENROUTER_API_KEY
         sync: false

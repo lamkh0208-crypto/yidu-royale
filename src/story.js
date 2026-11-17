@@ -247,10 +247,18 @@ const EVENT_ICONS = [
   [/倒戈|反咬|指控|翻臉|決裂|爆料|說溜嘴/, '🗯️'], [/通牒|攤牌|最後|揚言|警告|處分|封殺/, '⚠️'], [/上線|進群組|出現|加入|登入/, '🚪'],
   [/失蹤|不見|消失|神隱|少了/, '🕳️'], [/祕密|秘密|真相|證據|線索|馬腳/, '🔍'], [/直播|炎上|熱搜|網友/, '🔥'],
 ];
+// 像素證據圖的種類（前端 public/pixel.js 依此繪製）
+const EVENT_KINDS = [
+  [/監視器|監控|錄影|畫面|影片/, 'cctv'], [/截圖|對話紀錄|聊天紀錄|訊息|直播|炎上|熱搜|網友/, 'phone'],
+  [/轉帳|匯款|金流|錢|帳|預算|訂金|房租|紅包|禮金/, 'money'], [/錄音|語音|電話|來電/, 'audio'],
+  [/名單|報表|紀錄|文件|檔案|簡報|帳本|公告|明細/, 'doc'], [/照片|相片|自拍|證據|線索|馬腳/, 'photo'],
+  [/失蹤|不見|消失|神隱|少了|冰箱/, 'missing'], [/上線|進群組|出現|加入|登入|查房|進門/, 'door'],
+];
+const eventKind = (text) => (EVENT_KINDS.find(([re]) => re.test(text)) || [0, 'siren'])[1];
 const eventEmoji = (text) => (EVENT_ICONS.find(([re]) => re.test(text)) || [0, '🎬'])[1];
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-module.exports = { keywordEmoji, eventEmoji, roast, LIBRARY, heuristicScore, BOT_NAMES, BOT_LINES, CRITERIA, FALLBACK_STORIES, SEEDS, KEYWORD_POOL, GENERIC_LINES, ROASTS, pick };
+module.exports = { keywordEmoji, eventEmoji, eventKind, roast, LIBRARY, heuristicScore, BOT_NAMES, BOT_LINES, CRITERIA, FALLBACK_STORIES, SEEDS, KEYWORD_POOL, GENERIC_LINES, ROASTS, pick };

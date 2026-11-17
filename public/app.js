@@ -333,7 +333,17 @@
 
   function renderEntry(e) {
     if (e.k === 'sys') return h('div', { class: 'sys' }, e.text);
-    if (e.k === 'event') return h('div', { class: 'event' }, h('span', { class: 'evIcon' }, e.icon || '🎬'), h('div', {}, h('small', {}, '劇情新發展'), e.text));
+    if (e.k === 'event') {
+      return h('div', { class: 'event' },
+        e.kind && h('div', { class: 'evArt' }, Pixel.evidence(e.kind, e.text)),
+        h('div', { class: 'evRow' }, h('span', { class: 'evIcon' }, e.icon || '🎬'), h('div', {}, h('small', {}, '劇情新發展'), e.text)));
+    }
+    if (e.k === 'ending') {
+      return h('div', { class: 'endcard' },
+        Pixel.poster(e.names || []),
+        h('div', { class: 'endBody' }, h('small', {}, `《${e.title}》結局揭曉`), e.text,
+          h('div', { class: 'endNames' }, (e.names || []).join('　·　'))));
+    }
     if (e.k === 'npc') {
       return h('div', { class: 'msg npc' }, avatar(hueOf(e.who), 0, true),
         h('div', { class: 'body' },

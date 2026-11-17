@@ -138,7 +138,7 @@ async function callGemini(cfg, system, user, timeoutMs, task) {
   }
 }
 
-// DeepSeek、豆包（火山方舟）都相容 OpenAI chat completions 格式。
+// OpenRouter、豆包（火山方舟）都相容 OpenAI chat completions 格式。
 async function callOpenAICompat(cfg, system, user, timeoutMs) {
   const t = withTimeout(timeoutMs);
   try {
@@ -212,12 +212,6 @@ function buildProviders(env) {
       const backups = (env.GEMINI_BACKUP_MODEL === undefined ? 'gemini-3.5-flash-lite,gemini-3.1-flash-lite' : env.GEMINI_BACKUP_MODEL)
         .split(',').map((s) => s.trim()).filter(Boolean);
       backups.forEach((model, i) => out.push({ name: `gemini-backup${i + 1}`, call: callGemini, key: env.GEMINI_API_KEY, model }));
-    } else if (name === 'deepseek' && env.DEEPSEEK_API_KEY) {
-      out.push({
-        name, call: callOpenAICompat, key: env.DEEPSEEK_API_KEY,
-        baseUrl: env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-        model: env.DEEPSEEK_MODEL || 'deepseek-flash',
-      });
     } else if (name === 'openrouter' && env.OPENROUTER_API_KEY) {
       // OpenRouter 的免費路由：自動挑一個目前可用的免費模型。
       out.push({

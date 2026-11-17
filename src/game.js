@@ -362,7 +362,7 @@ class Room {
     const c = this.current;
     this.typing = '';
     this.sys(`第 ${this.round} 輪${c.final ? '（決賽）' : ''}｜本輪標準：${c.criterion.name}`);
-    if (c.event) this.log.push({ k: 'event', text: c.event, icon: story.eventEmoji(c.event) });
+    if (c.event) this.log.push({ k: 'event', text: c.event, icon: story.eventEmoji(c.event), kind: story.eventKind(c.event) });
     this.log.push({ k: 'npc', who: c.character, text: c.message, keyword: c.keyword, kwEmoji: story.keywordEmoji(c.keyword), target: c.target });
     this.setPhase('ANSWER', T.answer, () => this.closeAnswer());
     this.broadcast();
@@ -723,7 +723,7 @@ class Room {
     // 結局：揭曉角色祕密。AI 有寫就用 AI 的，否則用劇本設定組出來。
     const ending = this.ending
       || this.scenario.characters.filter((c) => c.secret).map((c) => `${c.name}：${c.secret}`).join('；');
-    if (ending) this.sys(`🎬 結局揭曉｜${ending}`);
+    if (ending) this.log.push({ k: 'ending', text: ending, title: this.scenario.title, names: this.scenario.characters.map((c) => c.name) });
     if (ranking[0]) this.sys(`🏆 ${ranking[0].name} 活到最後！`);
     this.current = null;
     this.setPhase('OVER', 0);
