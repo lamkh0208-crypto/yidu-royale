@@ -252,3 +252,60 @@ canvas.px { display: block; width: 100%; height: auto; image-rendering: pixelate
 .reveal.escaped { background: #3a1616; border-left: 4px solid var(--danger); }
 .reveal small { display: block; font-size: 11px; color: var(--dim); letter-spacing: 1px; }
 .reveal .why { font-weight: 500; font-size: 13px; margin-top: 2px; }
+/* ---- 配音室 ---- */
+.studio .tips { font-size: 14px; color: var(--dim); padding-left: 20px; }
+.studio code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
+.lines { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.line { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.line .lt b { font-size: 17px; display: block; }
+.line .lt small { color: var(--dim); }
+.line audio { grid-column: 1 / -1; width: 100%; height: 36px; }
+.line .rec { background: var(--panel2); border: 1.5px solid var(--line); }
+.line .rec.recording { background: var(--danger); color: #fff; animation: pulse 1s infinite; }
+
+/* ---- 第十版：像素身分牌、翻牌、能力、手感 ---- */
+.cardStage { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.flip { width: 176px; aspect-ratio: 64 / 88; perspective: 900px; position: relative; cursor: pointer; }
+.flip .face { position: absolute; inset: 0; backface-visibility: hidden; transition: transform .6s cubic-bezier(.3, 1.4, .5, 1); border-radius: 6px; overflow: hidden; box-shadow: 0 6px 22px #000b; }
+.flip .face.front { transform: rotateY(180deg); }
+.flip.flipped .face.back { transform: rotateY(-180deg); }
+.flip.flipped .face.front { transform: rotateY(0); }
+.flip canvas.px { width: 100%; height: 100%; }
+.flip .plate { position: absolute; left: 0; right: 0; bottom: 8.5%; text-align: center; font-weight: 900; font-size: 18px; color: #fff; text-shadow: 0 2px 0 #000; letter-spacing: 3px; }
+.flip:not(.flipped) { animation: wobble 1.2s ease-in-out infinite; }
+.tapme { animation: pulse 1s infinite; margin: 0; }
+.cardRow.ability { background: #00000030; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); }
+.cardRow .result { margin-top: 6px; font-weight: 800; color: #ffe9a3; }
+.role-guard .badge { background: #2f8a4f; color: #fff; }
+.card.role-guard { border-color: #2f8a4f; background: linear-gradient(180deg, #13261a, var(--panel) 40%); }
+#btnRole.ping { position: relative; }
+#btnRole.ping::after { content: ''; position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: pulse 1s infinite; }
+.cardRowAll { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; }
+.cardRowAll .mini { flex: 0 0 auto; width: 84px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; }
+.cardRowAll .mini .flip { width: 84px; }
+.cardRowAll .mini .flip:not(.flipped) { animation: none; }
+.cardRowAll .mini .plate { font-size: 11px; letter-spacing: 1px; }
+.cardRowAll .mini small { color: var(--dim); font-size: 10.5px; text-align: center; line-height: 1.3; }
+/* 階段橫幅 */
+.banner { position: fixed; left: 0; right: 0; top: 38%; z-index: 7; pointer-events: none; display: flex; justify-content: center; }
+.bannerIn { background: linear-gradient(90deg, transparent, #000d 15%, #000d 85%, transparent); width: 100%; text-align: center; padding: 14px 0; display: flex; flex-direction: column; }
+.bannerIn b { font-size: 34px; font-weight: 900; color: var(--accent); letter-spacing: 4px; text-shadow: 0 3px 0 #000; }
+.bannerIn small { color: #fff; font-size: 14px; margin-top: 2px; }
+.banner.go .bannerIn { animation: sweep 1.5s cubic-bezier(.2, .9, .3, 1) forwards; }
+@keyframes sweep { 0% { transform: translateX(100%); } 18% { transform: translateX(0); } 78% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(-100%); opacity: 0; } }
+/* 最後五秒的大倒數 */
+.bigCount { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 6; pointer-events: none; font-size: 120px; font-weight: 900; color: #ff5d5d; opacity: .22; font-variant-numeric: tabular-nums; }
+.bigCount.pop { animation: bigpop .9s ease-out; }
+@keyframes bigpop { from { transform: translate(-50%, -50%) scale(1.6); opacity: .5; } }
+/* 快速開頭句 */
+.starters { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 6px; scrollbar-width: none; }
+.starters::-webkit-scrollbar { display: none; }
+.starters button { flex: 0 0 auto; background: var(--panel2); border: 1.5px solid var(--line); padding: 6px 12px; font-size: 14px; font-weight: 600; border-radius: 99px; }
+.starters button.kwChip { border-color: var(--accent); color: var(--accent); }
+/* 按鈕手感 */
+button { transition: transform .08s ease, filter .08s ease; }
+button:active:not(:disabled) { transform: scale(.95); filter: brightness(1.15); }
+/* 打字時收起角色舞台，多留空間給聊天紀錄 */
+body.kbd #stage { display: none !important; }
+body.kbd .players { padding-top: 4px; padding-bottom: 4px; }
+@media (prefers-reduced-motion: reduce) { .banner.go .bannerIn, .flip .face { animation: none; transition: none; } }

@@ -9,9 +9,11 @@ const { AI } = require('./src/ai');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC = path.join(__dirname, 'public');
-const MIME = { '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const MIME = { '.mp3': 'audio/mpeg', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 
 const ai = new AI();
+const { Voice } = require('./src/voice');
+const voice = new Voice();
 const rooms = new Map();
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // 去掉容易看錯的 I、O
 
@@ -39,9 +41,21 @@ function ipInfo(ip) {
 // ---------- HTTP：只提供靜態檔 ----------
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  // 遊戲中即時產生的配音（只存在記憶體裡）
+  const vm = /^\/voice\/rt\/([0-9a-f]{16})\.wav$/.exec(url.pathname);
+  if (vm) {
+    const wav = voice.get(vm[1]);
+    if (!wav) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'content-type': 'audio/wav', 'cache-control': 'private, max-age=3600', 'content-length': wav.length });
+    return res.end(wav);
+  }
+  if (url.pathname === '/voice/lines.json') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
+    return res.end(JSON.stringify(require('./src/voice-lines')));
+  }
   if (url.pathname === '/healthz') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, rooms: rooms.size, rssMB: Math.round(process.memoryUsage().rss / 1e6), clients: wss.clients.size, ai: ai.providers.map((p) => p.name), aiStats: ai.stats }));
+    return res.end(JSON.stringify({ ok: true, rooms: rooms.size, rssMB: Math.round(process.memoryUsage().rss / 1e6), clients: wss.clients.size, ai: ai.providers.map((p) => p.name), aiStats: ai.stats, voice: voice.locales, voiceStats: voice.stats }));
   }
   const rel = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
   const file = path.join(PUBLIC, path.normalize(rel));
@@ -59,7 +73,7 @@ const server = http.createServer((req, res) => {
       'cache-control': 'no-cache',
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'same-origin',
-      'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+      'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; media-src 'self' blob:; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
     });
     res.end(buf);
   });
@@ -113,7 +127,7 @@ wss.on('connection', (ws, req) => {
         info.creates = info.creates.filter((t) => now - t < 60000);
         if (info.creates.length >= MAX_CREATES_PER_MIN) return send({ t: 'error', msg: '開房太頻繁，等一下再試' });
         info.creates.push(now);
-        target = new Room(newCode(), ai, String(m.locale || ''));
+        target = new Room(newCode(), ai, String(m.locale || ''), voice);
         rooms.set(target.code, target);
       } else {
         target = rooms.get(String(m.code || '').toUpperCase().trim());
@@ -132,6 +146,8 @@ wss.on('connection', (ws, req) => {
     else if (m.t === 'blame') room.blame(player, String(m.rid || ''));
     else if (m.t === 'haunt') room.haunt(player, String(m.id || ''));
     else if (m.t === 'frame') room.frame(player, String(m.id || ''));
+    else if (m.t === 'check') room.check(player, String(m.id || ''));
+    else if (m.t === 'guard') room.guardPick(player, String(m.id || ''));
     else if (m.t === 'accuse') room.accuse(player, String(m.id || ''));
     else if (m.t === 'emoji') room.emoji(player, String(m.e || ''));
     else if (m.t === 'word') room.word(player, m.text);

@@ -1,6 +1,10 @@
 'use strict';
 // 身分系統（狼人殺式）：每位玩家有公開身分、私人背景與不可告人的祕密。
-// 其中一人是「內鬼」（真正搞出這件事的人），一人是「知情者」（知道內鬼是兩人之一）。
+// 角色（參考狼人殺）：
+//   內鬼（狼人）：真正搞出這件事的人；一局一次「栽贓」。
+//   知情者（預言家）：一局兩次「查手機」，查一個人是不是內鬼。
+//   和事佬（守衛）：每輪保一個人，那人這輪少扣一條命；不能連續兩輪保同一人，也不能保自己。（5 人以上才有）
+//   路人（村民）：沒有能力，靠推理。
 // 最後一輪結束後大家指證內鬼：抓到了正義勝利，抓錯了內鬼逃脫。
 
 const crypto = require('crypto');
@@ -66,10 +70,11 @@ const POOL = {
 
 const TEXT = {
   tw: {
-    roleName: { insider: '內鬼', witness: '知情者', civilian: '路人' },
+    roleName: { insider: '內鬼', witness: '知情者', guard: '和事佬', civilian: '路人' },
     goal: {
       insider: '這件事其實是你搞出來的（或你有份）。撐到最後別被指證，必要時把鍋甩給別人。你有一次「栽贓」可以用。',
-      witness: '你看到了一些事。最後指證時帶大家抓出內鬼，但別讓內鬼發現你知道。',
+      witness: '你有兩次「查手機」：每次查一個人是不是內鬼。最後指證時帶大家抓出內鬼，但別讓內鬼發現你知道。',
+      guard: '每輪可以「勸和」一個人，他這輪少扣一條命（不能保自己，也不能連續兩輪保同一人）。幫好人撐到最後。',
       civilian: '你是清白的，但也有不想被知道的事。活下去，最後指證出真正的內鬼。',
     },
     insiderSecret: (t) => `《${t}》出事那晚，你就在現場，而且動過手腳。`,
@@ -85,14 +90,20 @@ const TEXT = {
     escaped: (name, id, wrong) => `🎭 內鬼逃脫：真正的內鬼是 ${name}（${id}）${wrong ? `，大家卻冤枉了 ${wrong}` : ''}。`,
     tie: '票數平手，沒有人被指證。',
     accusedDesc: (n) => `被 ${n} 人指證為內鬼`,
+    checkAsk: (n) => `📱 查手機（還有 ${n} 次）：選一個人，看他是不是內鬼。`,
+    checkResult: (name, yes) => (yes ? `你查了 ${name} 的手機：他就是內鬼！` : `你查了 ${name} 的手機：他不是內鬼。`),
+    guardAsk: '🤝 勸和：選一個人，他這輪少扣一條命。',
+    guardOn: (name) => `這輪你在保 ${name}。`,
+    guarded: (name) => `🤝 有人出面打圓場，${name} 少扣了一條命`,
     awardDetective: ['🕵️', '神探', (n) => `指證正確（${n} 人）`],
     awardActor: ['🎬', '影帝', () => '當了整局內鬼還全身而退'],
   },
   hk: {
-    roleName: { insider: '內鬼', witness: '知情人', civilian: '路人' },
+    roleName: { insider: '內鬼', witness: '知情人', guard: '和事佬', civilian: '路人' },
     goal: {
       insider: '呢件事其實係你搞出嚟（或者你有份）。捱到最後唔好俾人指證，有需要就將隻鑊甩俾人。你有一次「插贓」可以用。',
-      witness: '你見到啲嘢。最後指證時帶大家捉個內鬼出嚟，但唔好俾內鬼知你知。',
+      witness: '你有兩次「睇電話」：每次查一個人係唔係內鬼。最後指證時帶大家捉個內鬼出嚟，但唔好俾內鬼知你知。',
+      guard: '每輪可以「勸交」一個人，佢今輪少扣一條命（唔可以保自己，亦唔可以連續兩輪保同一個）。幫好人捱到最後。',
       civilian: '你係清白嘅，不過都有啲唔想俾人知嘅嘢。生存落去，最後指證真正嘅內鬼。',
     },
     insiderSecret: (t) => `《${t}》出事嗰晚，你就喺現場，仲郁過手腳。`,
@@ -108,6 +119,11 @@ const TEXT = {
     escaped: (name, id, wrong) => `🎭 內鬼走甩：真正嘅內鬼係 ${name}（${id}）${wrong ? `，大家反而冤枉咗 ${wrong}` : ''}。`,
     tie: '票數打和，冇人俾人指證。',
     accusedDesc: (n) => `俾 ${n} 個人指證做內鬼`,
+    checkAsk: (n) => `📱 睇電話（仲有 ${n} 次）：揀一個人，睇佢係唔係內鬼。`,
+    checkResult: (name, yes) => (yes ? `你睇咗 ${name} 部電話：佢就係內鬼！` : `你睇咗 ${name} 部電話：佢唔係內鬼。`),
+    guardAsk: '🤝 勸交：揀一個人，佢今輪少扣一條命。',
+    guardOn: (name) => `今輪你保緊 ${name}。`,
+    guarded: (name) => `🤝 有人出嚟打圓場，${name} 少扣咗一條命`,
     awardDetective: ['🕵️', '神探', (n) => `指證正確（${n} 人）`],
     awardActor: ['🎬', '影帝', () => '做咗成局內鬼仲全身而退'],
   },
@@ -122,21 +138,19 @@ function deal(players, locale, title) {
   const order = shuffle(players);
   const insider = order[0];
   const witness = players.length >= 3 ? order[1] : null;
+  const guard = players.length >= 5 ? order[2] : null;
   const ids = shuffle(pool.identity), bgs = shuffle(pool.backstory), secrets = shuffle(pool.secret);
   players.forEach((p, i) => {
-    p.role = p === insider ? 'insider' : p === witness ? 'witness' : 'civilian';
+    p.role = p === insider ? 'insider' : p === witness ? 'witness' : p === guard ? 'guard' : 'civilian';
+    p.checks = p.role === 'witness' ? 2 : 0;
+    p.checked = [];
+    p.lastGuard = '';
     p.identity = ids[i % ids.length];
     p.backstory = bgs[i % bgs.length];
     p.secret = p.role === 'insider' ? T.insiderSecret(title) : secrets[i % secrets.length];
     p.framed = false;
   });
-  if (witness) {
-    // 給知情者兩個名字：內鬼和一個清白的人（不會是知情者自己）
-    const decoy = pick(players.filter((p) => p !== insider && p !== witness));
-    const pair = shuffle([insider, decoy]);
-    witness.hint = T.witnessHint(pair[0].name, pair[1].name);
-  }
-  return { insider, witness };
+  return { insider, witness, guard };
 }
 
 // 把 AI 寫的身分卡套到玩家身上（只接受名單上的玩家，缺的維持保底）。

@@ -73,6 +73,7 @@
     }
     return svg;
   }
+  const genderOf = (name) => ((S && S.scenario && S.scenario.characters.find((c) => c.name === name)) || {}).g || 'm';
   const moodOfAnger = (a) => (a < 30 ? 1 : a < 55 ? 2 : a < 80 ? 3 : 4);
   const hueOf = (s) => [...s].reduce((a, c) => (a * 31 + c.codePointAt(0)) % 360, 7);
 
@@ -92,7 +93,9 @@
         '每個人都有<b>身分卡</b>（🎭）：公開身分、私人背景、祕密。其中一人是<b>內鬼</b>，一人是<b>知情者</b>。',
         '五輪結束後<b>指證內鬼</b>：抓到了正義勝利；抓錯了，內鬼逃脫，被冤枉的人變成<b>背鍋俠</b>。',
       ],
-      card: { title: '你的身分卡', identity: '公開身分', backstory: '你的背景', secret: '你的祕密（別說出去）', hint: '你知道的事', goal: '你的目標', ok: '我知道了', frameAsk: '🧨 栽贓（一局一次）：選一個人，下一輪會出現對他不利的匿名照片。', framed: (n) => `已栽贓 ${n}，下一輪見分曉。`, tapHint: '點頭像可以看別人的公開身分' },
+      starters: ['抱歉，', '其實', '我保證', '我現在馬上'], speed: '點一下加快',
+      banner: { round: (n) => `第 ${n} 輪`, blame: '🫵 甩鍋時間', accuse: '🕵️ 指證時間', judge: '已讀中…' },
+      card: { title: '你的身分卡', reveal: '點一下翻牌', allCards: '全員身分', identity: '公開身分', backstory: '你的背景', secret: '你的祕密（別說出去）', hint: '你知道的事', goal: '你的目標', ok: '我知道了', frameAsk: '🧨 栽贓（一局一次）：選一個人，下一輪會出現對他不利的匿名照片。', framed: (n) => `已栽贓 ${n}，下一輪見分曉。`, tapHint: '點頭像可以看別人的公開身分' },
       accuseAsk: ['🕵️ 指證時間：', '誰是內鬼？', '（所有人都能投，平手算內鬼逃脫）'], accuseDone: '已指證，等其他人…',
       caught: (n) => `🕵️ 內鬼 ${n} 被抓到了`, escaped: (n) => `🎭 內鬼 ${n} 逃脫了`, insiderWas: '真正的內鬼', newEvent: '劇情新發展',
       blameAsk: ['🫵 甩鍋時間：', '你猜哪一句會最慘？', '猜中拿護盾 🛡️（不能選自己）'], blameDone: '已經指了，等其他人…',
@@ -121,7 +124,9 @@
         '每個人都有<b>身分卡</b>（🎭）：公開身分、私人背景、祕密。其中一個係<b>內鬼</b>，一個係<b>知情人</b>。',
         '五輪完咗之後<b>指證內鬼</b>：捉到就正義得勝；捉錯人，內鬼走甩，俾人冤枉嗰個就係<b>孭鑊俠</b>。',
       ],
-      card: { title: '你張身分卡', identity: '公開身分', backstory: '你嘅背景', secret: '你嘅祕密（唔好講出去）', hint: '你知道嘅嘢', goal: '你嘅目標', ok: '知道喇', frameAsk: '🧨 插贓（一局一次）：揀一個人，下一輪會出現對佢唔利嘅匿名相。', framed: (n) => `已經插咗 ${n} 贓，下一輪見真章。`, tapHint: '㩒頭像可以睇其他人嘅公開身分' },
+      starters: ['對唔住，', '其實', '我發誓', '我而家即刻'], speed: '㩒一下快啲',
+      banner: { round: (n) => `第 ${n} 輪`, blame: '🫵 甩鑊時間', accuse: '🕵️ 指證時間', judge: '藍剔緊…' },
+      card: { title: '你張身分卡', reveal: '㩒一下翻牌', allCards: '全部人嘅身分', identity: '公開身分', backstory: '你嘅背景', secret: '你嘅祕密（唔好講出去）', hint: '你知道嘅嘢', goal: '你嘅目標', ok: '知道喇', frameAsk: '🧨 插贓（一局一次）：揀一個人，下一輪會出現對佢唔利嘅匿名相。', framed: (n) => `已經插咗 ${n} 贓，下一輪見真章。`, tapHint: '㩒頭像可以睇其他人嘅公開身分' },
       accuseAsk: ['🕵️ 指證時間：', '邊個係內鬼？', '（所有人都可以投，打和當內鬼走甩）'], accuseDone: '指證咗，等埋其他人…',
       caught: (n) => `🕵️ 內鬼 ${n} 俾人捉到`, escaped: (n) => `🎭 內鬼 ${n} 走甩咗`, insiderWas: '真正嘅內鬼', newEvent: '劇情新發展',
       blameAsk: ['🫵 甩鑊時間：', '你估邊句會最慘？', '估中攞護盾 🛡️（唔可以揀自己）'], blameDone: '指咗喇，等埋其他人…',
@@ -159,6 +164,7 @@
   let stageWho = '';
   let topicDraft = '';
   let pending = null;
+  let fastReveal = false;
   let wakeTimer = null;
   let retry = 0;
   const store = {
@@ -244,6 +250,18 @@
   }
 
   // ---------- 畫面 ----------
+  // 階段橫幅：換輪、甩鍋、指證時從畫面中間掃過去
+  function banner(text, sub) {
+    const b = $('banner');
+    fill(b, h('div', { class: 'bannerIn' }, h('b', {}, text), sub && h('small', {}, sub)));
+    b.hidden = false;
+    b.classList.remove('go');
+    void b.offsetWidth;
+    b.classList.add('go');
+    clearTimeout(banner.t);
+    banner.t = setTimeout(() => { b.hidden = true; }, 1500);
+  }
+
   function onState(m) {
     const prev = S;
     S = m;
@@ -251,6 +269,7 @@
     store.set('yd_code', m.code);
     store.set('yd_token', m.you.token);
     if (!prev) {
+      Sound.loadPack(m.locale);
       show('game');
       history.replaceState(null, '', `?room=${m.code}`);
     }
@@ -259,7 +278,9 @@
       Sound.setMood(m.phase === 'LOBBY' || m.phase === 'OVER' ? 'lobby' : m.phase === 'ANSWER' ? 'tense' : 'idle');
       if (prev && m.phase === 'ANSWER' && navigator.vibrate) navigator.vibrate(60);
       if (prev && prev.phase === 'LOBBY' && m.phase === 'INTRO') Sound.play('start');
-      if (prev && m.phase === 'BLAME') Sound.play('pop');
+      if (prev && m.phase === 'BLAME') { Sound.play('pop'); banner(L().banner.blame); Sound.shout('blame', m.locale, 'n', '', '旁白', 2); }
+      if (prev && m.phase === 'ACCUSE') { Sound.play('start'); banner(L().banner.accuse); Sound.shout('accuse', m.locale, 'n', '', '旁白', 2); }
+      if (prev && m.phase === 'INTRO' && m.round && m.round !== prev.round) banner(L().banner.round(m.round), m.criterion ? m.criterion.name : '');
     }
     render();
     firstSync = false;
@@ -318,31 +339,85 @@
     tick();
   }
 
-  // 身分卡：開局自動打開一次，之後隨時點 🎭 查看
+  // 身分卡：開局自動打開並翻牌（像狼人殺發牌），之後隨時點 🎭 查看、使用能力
   let cardSeen = '';
+  let cardFlipped = false;
+  const cardArt = new Map();
+  function artFor(role, identity) {
+    const k = `${role}|${identity}`;
+    if (!cardArt.has(k)) cardArt.set(k, Pixel.roleCard(role, identity));
+    return cardArt.get(k).cloneNode ? copyCanvas(cardArt.get(k)) : cardArt.get(k);
+  }
+  function copyCanvas(c) {
+    const n = document.createElement('canvas');
+    n.width = c.width; n.height = c.height; n.className = c.className;
+    n.getContext('2d').drawImage(c, 0, 0);
+    return n;
+  }
+  function pixelCard(role, identity, roleName, flipped, onTap) {
+    return h('div', { class: `flip${flipped ? ' flipped' : ''}`, onclick: onTap || null },
+      h('div', { class: 'face back' }, copyCanvas(cardBackArt)),
+      h('div', { class: `face front role-${role}` }, artFor(role, identity), h('div', { class: 'plate' }, roleName)));
+  }
+  let cardBackArt = null;
   function renderRoleCard(open) {
     const box = $('roleCard');
     const r = S && S.myRole;
     $('btnRole').hidden = !r;
+    $('btnRole').classList.toggle('ping', !!r && !!(r.canFrame || r.canCheck || r.canGuard));
     if (!r) { box.hidden = true; return; }
     const key = `${S.code}|${S.scenario ? S.scenario.title : ''}|${r.identity}`;
-    if (cardSeen !== key && S.phase !== 'OVER') { cardSeen = key; open = true; }
+    if (cardSeen !== key && S.phase !== 'OVER') { cardSeen = key; cardFlipped = false; open = true; }
     if (open === true) box.hidden = false;
     if (box.hidden) return;
+    cardBackArt = cardBackArt || Pixel.cardBack();
     const c = L().card;
-    const players = S.players.filter((p) => p.identity && p.id !== S.you.id);
+    const others = S.players.filter((p) => p.identity && p.id !== S.you.id);
+    const flip = () => {
+      if (cardFlipped) return;
+      cardFlipped = true;
+      Sound.play('start');
+      if (navigator.vibrate) navigator.vibrate(30);
+      box.querySelector('.flip').classList.add('flipped');
+      setTimeout(() => renderRoleCard(), 650);
+    };
+    const chips = (list, isOn, onPick) => h('div', { class: 'chips' }, list.map((p) => h('button', { class: isOn(p) ? 'sel' : '',
+      onclick: () => { onPick(p); Sound.play('ghost'); if (navigator.vibrate) navigator.vibrate(15); } }, `${p.name}（${p.identity}）`)));
     fill(box, h('div', { class: `card role-${r.role}` },
-      h('div', { class: 'cardHead' }, h('small', {}, c.title), h('b', { class: 'badge' }, r.roleName)),
-      h('div', { class: 'cardRow' }, h('small', {}, c.identity), h('div', { class: 'big' }, r.identity)),
-      h('div', { class: 'cardRow' }, h('small', {}, c.backstory), r.backstory),
-      h('div', { class: 'cardRow secret' }, h('small', {}, c.secret), r.secret),
-      r.hint && h('div', { class: 'cardRow hintRow' }, h('small', {}, c.hint), r.hint),
-      h('div', { class: 'cardRow' }, h('small', {}, c.goal), r.goal),
-      r.canFrame && h('div', { class: 'cardRow' }, h('small', {}, c.frameAsk),
-        h('div', { class: 'chips' }, players.map((p) => h('button', { onclick: () => { send({ t: 'frame', id: p.id }); Sound.play('ghost'); } }, `${p.name}（${p.identity}）`)))),
-      r.framed && h('div', { class: 'cardRow' }, c.framed(r.framed)),
-      h('p', { class: 'hint small' }, c.tapHint),
-      h('button', { class: 'primary', onclick: () => { box.hidden = true; } }, c.ok)));
+      h('div', { class: 'cardHead' }, h('small', {}, c.title), cardFlipped && h('b', { class: 'badge' }, r.roleName)),
+      h('div', { class: 'cardStage' }, pixelCard(r.role, r.identity, r.roleName, cardFlipped, flip),
+        !cardFlipped && h('p', { class: 'hint small tapme' }, c.reveal)),
+      cardFlipped && [
+        h('div', { class: 'cardRow' }, h('small', {}, c.identity), h('div', { class: 'big' }, r.identity)),
+        h('div', { class: 'cardRow' }, h('small', {}, c.backstory), r.backstory),
+        h('div', { class: 'cardRow secret' }, h('small', {}, c.secret), r.secret),
+        h('div', { class: 'cardRow' }, h('small', {}, c.goal), r.goal),
+        // 知情者：查手機
+        r.role === 'witness' && h('div', { class: 'cardRow ability' }, h('small', {}, r.checkAsk),
+          r.canCheck && chips(others.filter((p) => !(r.checkedIds || []).includes(p.id)), () => false, (p) => send({ t: 'check', id: p.id })),
+          (r.checked || []).map((t) => h('div', { class: 'result' }, t))),
+        // 和事佬：勸和
+        r.role === 'guard' && h('div', { class: 'cardRow ability' }, h('small', {}, r.guardAsk),
+          r.canGuard && chips(S.players.filter((p) => p.lives > 0 && p.id !== S.you.id && p.id !== r.lastGuard), (p) => p.name === r.guarding, (p) => send({ t: 'guard', id: p.id })),
+          r.guardOn && h('div', { class: 'result' }, r.guardOn)),
+        // 內鬼：栽贓
+        r.canFrame && h('div', { class: 'cardRow ability' }, h('small', {}, c.frameAsk), chips(others, () => false, (p) => send({ t: 'frame', id: p.id }))),
+        r.framed && h('div', { class: 'cardRow ability' }, h('div', { class: 'result' }, c.framed(r.framed))),
+        h('p', { class: 'hint small' }, c.tapHint),
+        h('button', { class: 'primary', onclick: () => { box.hidden = true; } }, c.ok),
+      ]));
+    if (!cardFlipped) setTimeout(() => { if (!cardFlipped && !box.hidden) flip(); }, 1600); // 不點也會自己翻
+  }
+
+  // 結算：全員翻牌
+  function revealCards(roles) {
+    if (!roles || !roles.length) return null;
+    cardBackArt = cardBackArt || Pixel.cardBack();
+    const row = h('div', { class: 'cardRowAll' }, roles.map((o) => h('div', { class: 'mini' },
+      pixelCard(o.role, o.identity, ({ insider: '內鬼', witness: S.locale === 'hk' ? '知情人' : '知情者', guard: '和事佬', civilian: '路人' })[o.role], false),
+      h('b', {}, o.name), h('small', {}, o.identity))));
+    row.querySelectorAll('.flip').forEach((f, i) => setTimeout(() => { f.classList.add('flipped'); Sound.play('pop'); }, 500 + i * 380));
+    return h('div', { class: 'stack' }, h('p', { class: 'hint small' }, L().card.allCards), row);
   }
 
   // 舞台：出題角色的大頭、表情與怒氣值
@@ -379,12 +454,12 @@
       appendEntry(e, false);
       const next = queue[0];
       if (next && next.k === 'reply') {
-        qTimer = setTimeout(pump, S.phase === 'REVEAL' ? 1300 : 120);
+        qTimer = setTimeout(pump, S.phase === 'REVEAL' && !fastReveal ? 1300 : fastReveal ? 280 : 120);
         break;
       }
     }
     renderPlayers();
-    if (!queue.length && !qTimer) setTimeout(() => !queue.length && !qTimer && syncStage(), 1200);
+    if (!queue.length && !qTimer) { fastReveal = false; setTimeout(() => !queue.length && !qTimer && syncStage(), 1200); }
   }
 
   function appendEntry(e, silent) {
@@ -394,20 +469,23 @@
     log.append(el);
     if (stick || e.pid === S.you.id) log.scrollTop = log.scrollHeight;
     if (silent) return;
-    if (e.k === 'npc') { Sound.play('msg'); Sound.say(e.text, S.locale, e.who, moodOfAnger(S.anger)); }
+    if (e.k === 'npc') { Sound.play('msg'); if (e.voice) Sound.voice(e.voice, e.text, S.locale, e.who, moodOfAnger(S.anger)); else Sound.say(e.text, S.locale, e.who, moodOfAnger(S.anger)); }
     else if (e.k === 'reply') {
       // 角色讀到這句回覆：換表情、怒氣值跟著跳
       if (e.mood != null) setStage(e.who, e.mood, shownAnger + MOOD_DELTA[e.mood], true);
       if (e.mood === 4) Sound.play('rage'); else if (e.mood === 0) Sound.play('happy');
       // 語音：出局喊一句、扣命唸吐槽、沒扣命但暴怒也喊一句
-      if (e.out) Sound.say(L().shout.out, S.locale, e.who, 4);
+      if (e.out) Sound.shout('out', S.locale, genderOf(e.who), L().shout.out, e.who, 4);
       else if (e.lost) Sound.say(e.roast, S.locale, e.who, e.mood);
-      else if (e.mood === 4) Sound.say(L().shout.rage, S.locale, e.who, 4);
+      else if (e.mood === 4) Sound.shout('rage', S.locale, genderOf(e.who), L().shout.rage, e.who, 4);
+      else if (e.mood === 0) Sound.shout('happy', S.locale, genderOf(e.who), '', e.who, 0);
       Sound.play(e.out ? 'out' : e.lost ? 'lost' : 'pop');
       if (e.lost && e.pid === S.you.id && navigator.vibrate) navigator.vibrate([80, 60, 80]);
     } else if (e.k === 'sys') {
-      if (e.text.startsWith('🏆')) { Sound.play('win'); Sound.say(L().shout.win, S.locale, S.npc, 0); }
-      else if (e.text.startsWith('🛡️')) Sound.say(L().shout.shield, S.locale, S.npc, 1);
+      if (e.text.startsWith('🏆')) { Sound.play('win'); Sound.shout('win', S.locale, genderOf(S.npc), L().shout.win, S.npc, 0); }
+      else if (e.text.startsWith('🕵️ 抓到') || e.text.startsWith('🕵️ 捉到')) { Sound.play('win'); Sound.shout('caught', S.locale, 'n', '', '旁白', 0); }
+      else if (/^🎭 內鬼(逃脫|走甩)/.test(e.text)) { Sound.play('out'); Sound.shout('escaped', S.locale, 'n', '', '旁白', 3); }
+      else if (e.text.startsWith('🛡️')) Sound.shout('shield', S.locale, genderOf(S.npc), L().shout.shield, S.npc, 1);
       else if (e.text.startsWith('👻')) Sound.play('ghost');
     }
   }
@@ -557,6 +635,16 @@
       fill(dock, 
         h('p', { class: 'hint' }, `本輪標準：`, h('b', {}, S.criterion.name), `（${S.criterion.desc}）`, h('br'), L().stuff(S.kwEmoji || '', S.keyword),
           S.haunt && h('span', { class: 'hauntLine' }, h('br'), L().haunted(S.haunt.by, S.haunt.emoji, S.haunt.word))),
+        h('div', { class: 'starters' }, [S.keyword].concat(S.haunt ? [S.haunt.word] : [], L().starters).map((t, i) =>
+          h('button', { class: i === 0 || (S.haunt && i === 1) ? 'kwChip' : '', onmousedown: (ev) => ev.preventDefault(), onclick: () => {
+            const st = input.selectionStart ?? input.value.length;
+            input.value = (input.value.slice(0, st) + t + input.value.slice(input.selectionEnd ?? st)).slice(0, S.replyMax);
+            input.focus();
+            const pos = Math.min(st + t.length, input.value.length);
+            input.setSelectionRange(pos, pos);
+            upd();
+            if (navigator.vibrate) navigator.vibrate(8);
+          } }, i === 0 ? `${S.kwEmoji || ''}${t}` : t))),
         h('div', { class: 'row' }, input, h('button', { onclick: submit }, '送出')), count);
       input.focus();
     } else if (S.phase === 'ANSWER') {
@@ -585,6 +673,7 @@
         acc && h('h2', { class: acc.correct ? 'win' : 'lose' }, acc.correct ? L().caught(acc.insider.name) : L().escaped(acc.insider.name)),
         h(acc ? 'p' : 'h2', {}, r.winner ? `🏆 ${r.winner.name} 活到最後` : '無人生還'),
         h('p', {}, `《${r.title}》共 ${r.rounds} 輪${r.winner && r.winner.bot ? '｜你們輸給了 AI 路人 🤖' : ''}`),
+        revealCards(r.roles),
         r.awards && r.awards.length ? h('div', { class: 'awards' }, r.awards.map((a) => h('div', {}, h('b', {}, `${a.icon} ${a.title}`), ` ${a.name}`, h('small', {}, a.desc)))) : null,
         h('div', { class: 'rank' }, r.ranking.slice(0, 6).map((x, i) => h('span', { class: x.id === S.you.id ? 'me' : '' }, `${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${x.name}${x.lives ? ' ' + '♥'.repeat(x.lives) : ''}${(r.roles || []).find((o) => o.name === x.name && o.role === 'insider') ? ' 🎭' : ''}`))),
         h('div', { class: 'two' },
@@ -601,11 +690,15 @@
     if (!S) return;
     const left = deadline ? Math.max(0, deadline - Date.now()) : 0;
     const clock = $('clock');
-    clock.textContent = deadline ? Math.ceil(left / 1000) : '';
+    const sec = Math.ceil(left / 1000);
+    clock.textContent = deadline ? sec : '';
     clock.className = `clock${left < 10000 && (S.phase === 'ANSWER' || S.phase === 'BLAME' || S.phase === 'ACCUSE') ? ' hot' : ''}`;
     $('progress').style.width = deadline && S.total ? `${(left / S.total) * 100}%` : '0';
     const timed = S.phase === 'ANSWER' || S.phase === 'BLAME' || S.phase === 'ACCUSE';
-    const sec = Math.ceil(left / 1000);
+    const big = $('bigCount');
+    const showBig = timed && deadline && sec <= 5 && sec > 0;
+    if (showBig && big.textContent !== String(sec)) { big.textContent = sec; big.classList.remove('pop'); void big.offsetWidth; big.classList.add('pop'); }
+    big.hidden = !showBig;
     if (timed && deadline && sec <= 5 && sec > 0 && sec !== lastTick) {
       lastTick = sec;
       const my = me();
@@ -747,6 +840,12 @@
   $('code').addEventListener('keydown', (e) => e.key === 'Enter' && enter('join'));
   $('btnCode').onclick = invite;
   $('btnRole').onclick = () => renderRoleCard(true);
+  $('log').addEventListener('click', () => {
+    if (queue.length && !fastReveal) { fastReveal = true; clearTimeout(qTimer); qTimer = null; pump(); }
+  });
+  document.addEventListener('pointerdown', (e) => { if (e.target.closest('button') && navigator.vibrate) navigator.vibrate(6); });
+  document.addEventListener('focusin', (e) => { if (e.target.matches('#dock input')) document.body.classList.add('kbd'); });
+  document.addEventListener('focusout', (e) => { if (e.target.matches('#dock input')) setTimeout(() => document.body.classList.remove('kbd'), 120); });
   const SND = ['🔊', '🗣️', '🔔', '🔇'];
   $('btnSound').textContent = SND[Sound.mode];
   $('btnSound').onclick = () => {

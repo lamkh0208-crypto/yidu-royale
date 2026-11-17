@@ -138,6 +138,43 @@ window.Sound = (() => {
     start: (t) => [330, 440, 660].forEach((f, i) => tone(sfxBus, f, 0.14, 'square', 0.12, t + i * 0.09)),
   };
 
+  // ---------- 真人／預錄配音 ----------
+  // 預錄台詞包：public/voice/<地區>/index.json → { key: { m: [檔名], f: [檔名], n: [檔名] } }
+  const packs = {};
+  const buffers = new Map();
+  function loadPack(locale) {
+    if (packs[locale] !== undefined) return;
+    packs[locale] = null;
+    fetch(`voice/${locale}/index.json`).then((r) => (r.ok ? r.json() : null)).then((j) => { packs[locale] = j; }).catch(() => {});
+  }
+  async function getBuffer(url) {
+    if (buffers.has(url)) return buffers.get(url);
+    const p = fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then((a) => new Promise((res, rej) => ctx.decodeAudioData(a, res, rej)));
+    buffers.set(url, p);
+    p.catch(() => buffers.delete(url));
+    return p;
+  }
+  let clipNode = null;
+  async function playClip(url) {
+    if (!ctx || ctx.state !== 'running' || mode > 1) return false;
+    try {
+      const buf = await getBuffer(url);
+      if (clipNode) { try { clipNode.stop(); } catch (e) { /* 已停 */ } }
+      for (const n of voiceNodes) { try { n.stop(); } catch (e) { /* 已停 */ } }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      g.gain.value = 1.4;
+      src.connect(g).connect(sfxBus);
+      src.start();
+      clipNode = src;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // ---------- 碎碎念 ----------
   let voiceNodes = [];
   function babble(text, seed, mood) {
@@ -186,6 +223,22 @@ window.Sound = (() => {
     setMood(m) {
       if (m === mood) return;
       mood = m;
+    },
+    loadPack,
+    // 播放一段配音網址；失敗就退回碎碎念
+    voice(url, text, locale, who, mood) {
+      if (mode > 1) return;
+      playClip(url).then((ok) => { if (!ok) this.say(text, locale, who, mood); });
+    },
+    // 喊話：有預錄台詞就播（依角色性別），沒有就用碎碎念唸出文字
+    shout(key, locale, gender, text, who, mood) {
+      if (mode > 1) return;
+      const p = packs[locale];
+      const set = p && p[key] && (p[key][gender] || p[key].m || p[key].f || p[key].n);
+      if (set && set.length) {
+        const file = set[Math.floor(Math.random() * set.length)];
+        playClip(`voice/${locale}/${file}`).then((ok) => { if (!ok) this.say(text, locale, who, mood); });
+      } else this.say(text, locale, who, mood);
     },
     setEmotion(level) {
       emo = Math.max(0, Math.min(3, level | 0));

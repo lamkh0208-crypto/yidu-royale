@@ -161,7 +161,7 @@ async function runSolo(label, env, port) {
   const fail = [];
   if (!last || last.phase !== 'OVER') fail.push('單人遊戲沒有在 40 秒內結束');
   else {
-    if (last.players.filter((p) => p.bot).length !== 3) fail.push(`應該補 3 個 AI 路人，實際 ${last.players.filter((p) => p.bot).length}`);
+    if (last.players.filter((p) => p.bot).length !== 4) fail.push(`應該補 4 個 AI 路人，實際 ${last.players.filter((p) => p.bot).length}`);
     if (!botReplied) fail.push('AI 路人沒有回覆');
     if (!last.result || !last.result.winner) fail.push('沒有贏家');
     if (last.result && last.result.best && last.result.best.name !== '獨行俠') fail.push('最神回覆不該頒給 AI 路人');

@@ -443,7 +443,150 @@ window.Pixel = (() => {
     return b.toCanvas(8);
   }
 
+  // ---------- 身分牌（直式 64×88） ----------
+  const CW = 64, CH = 88;
+  const ROLE_THEME = {
+    insider: { bg: [0.32, 0.05, 0.07], glow: [1, 0.25, 0.2], frame: [0.85, 0.2, 0.18] },
+    witness: { bg: [0.05, 0.12, 0.3], glow: [0.4, 0.75, 1], frame: [0.35, 0.6, 0.95] },
+    guard: { bg: [0.05, 0.22, 0.13], glow: [0.45, 1, 0.6], frame: [0.4, 0.8, 0.5] },
+    civilian: { bg: [0.13, 0.14, 0.18], glow: [1, 0.85, 0.5], frame: [0.75, 0.68, 0.45] },
+  };
+
+  function cardFrame(b, frame) {
+    const gold = frame, dark = [frame[0] * 0.4, frame[1] * 0.4, frame[2] * 0.4];
+    for (let x = 0; x < CW; x++) { b.set(x, 0, dark); b.set(x, 1, gold); b.set(x, CH - 2, gold); b.set(x, CH - 1, dark); }
+    for (let y = 0; y < CH; y++) { b.set(0, y, dark); b.set(1, y, gold); b.set(CW - 2, y, gold); b.set(CW - 1, y, dark); }
+    for (let x = 4; x < CW - 4; x++) { b.set(x, 4, gold, 0.5); b.set(x, CH - 5, gold, 0.5); }
+    for (let y = 4; y < CH - 4; y++) { b.set(4, y, gold, 0.5); b.set(CW - 5, y, gold, 0.5); }
+    for (const [cx, cy] of [[4, 4], [CW - 5, 4], [4, CH - 5], [CW - 5, CH - 5]]) { // 四角的寶石
+      b.ellipse(cx, cy, 2.2, 2.2, gold);
+      b.set(cx - 1, cy - 1, [1, 1, 1], 0.7);
+    }
+  }
+
+  // 半身人像：頭、頭髮、肩膀；回傳臉的位置讓各角色加道具
+  function bust(b, rnd, cx, top, opt) {
+    const skin = opt.skin || [[0.96, 0.8, 0.66], [0.88, 0.7, 0.54], [0.78, 0.58, 0.44]][rnd() * 3 | 0];
+    const hair = opt.hair || [[0.1, 0.08, 0.08], [0.24, 0.15, 0.09], [0.36, 0.25, 0.14]][rnd() * 3 | 0];
+    const shirt = opt.shirt;
+    b.ellipse(cx, top + 44, 20, 14, shirt);                       // 肩膀
+    b.ellipse(cx - 7, top + 38, 8, 5, [1, 1, 1], 0.12, 1);          // 肩膀高光
+    b.rect(cx - 3, top + 26, 6, 8, [skin[0] * 0.78, skin[1] * 0.74, skin[2] * 0.74]); // 脖子
+    b.ellipse(cx, top + 18, 9.5, 11, skin);                        // 臉
+    b.ellipse(cx + 4, top + 19, 5, 9, [skin[0] * 0.75, skin[1] * 0.7, skin[2] * 0.7], 0.45, 1); // 臉的暗面
+    b.ellipse(cx, top + 10, 10.5, 6.5, hair);                      // 頭髮
+    b.rect(cx - 10, top + 9, 3, 9, hair);
+    b.rect(cx + 7, top + 9, 3, 9, hair);
+    const eye = opt.eyes || [0.08, 0.06, 0.06];
+    b.rect(cx - 5, top + 18, 3, 2, eye);
+    b.rect(cx + 2, top + 18, 3, 2, eye);
+    b.rect(cx - 6, top + 15, 4, 1, hair, 0.9);                     // 眉毛
+    b.rect(cx + 2, top + 15, 4, 1, hair, 0.9);
+    b.set(cx, top + 22, [skin[0] * 0.7, skin[1] * 0.64, skin[2] * 0.62]);
+    b.rect(cx - 2, top + 25, 4, 1, opt.mouth || [0.55, 0.22, 0.2]);
+    return { skin, hair, faceY: top + 18 };
+  }
+
+  const ROLE_ART = {
+    // 內鬼：兜帽、陰影裡發光的眼睛、拿著半張面具
+    insider(b, rnd, th) {
+      const cx = 32, top = 18;
+      bust(b, rnd, cx, top, { shirt: [0.12, 0.05, 0.07], eyes: [1, 0.3, 0.2], mouth: [0.3, 0.08, 0.08] });
+      b.ellipse(cx, top + 14, 15, 16, [0.09, 0.03, 0.05]);         // 兜帽
+      b.ellipse(cx, top + 19, 10, 11.5, [0.02, 0.01, 0.02], 0.85);  // 帽沿下的陰影
+      b.rect(cx - 5, top + 18, 3, 2, [1, 0.3, 0.2]);                // 發光的眼睛
+      b.rect(cx + 2, top + 18, 3, 2, [1, 0.3, 0.2]);
+      b.light(cx, top + 19, 12, th.glow, 0.25);
+      b.ellipse(cx + 15, top + 36, 6, 7, [0.95, 0.93, 0.88]);      // 面具
+      b.rect(cx + 12, top + 34, 2, 2, [0.1, 0.05, 0.05]);
+      b.rect(cx + 16, top + 34, 2, 2, [0.1, 0.05, 0.05]);
+      b.line(cx + 12, top + 39, cx + 18, top + 40, [0.6, 0.1, 0.1]);
+      b.rect(cx + 13, top + 42, 4, 6, [0.85, 0.7, 0.55]);          // 手
+    },
+    // 知情者：舉著手機，螢幕的藍光打在臉上
+    witness(b, rnd, th) {
+      const cx = 30, top = 18;
+      bust(b, rnd, cx, top, { shirt: [0.16, 0.28, 0.5] });
+      b.rect(cx + 9, top + 22, 12, 19, [0.06, 0.07, 0.1]);         // 手機
+      b.rect(cx + 10, top + 24, 10, 14, th.glow);
+      for (let i = 0; i < 4; i++) b.rect(cx + 11, top + 26 + i * 3, 4 + (rnd() * 5 | 0), 1, [0.1, 0.25, 0.5]);
+      b.rect(cx + 8, top + 38, 6, 6, [0.85, 0.7, 0.55]);           // 手
+      b.light(cx + 15, top + 30, 22, th.glow, 0.35);
+      b.ring(cx - 15, top + 8, 5, [0.8, 0.85, 0.95], 1, 1.4);      // 放大鏡
+      b.ellipse(cx - 15, top + 8, 4, 4, [0.6, 0.85, 1], 0.35);
+      b.line(cx - 11, top + 12, cx - 7, top + 17, [0.55, 0.4, 0.25]);
+    },
+    // 和事佬：一手拿著盾牌、一手比 OK
+    guard(b, rnd, th) {
+      const cx = 34, top = 18;
+      bust(b, rnd, cx, top, { shirt: [0.18, 0.42, 0.26] });
+      const sx = cx - 14, sy = top + 36;
+      b.ellipse(sx, sy, 10, 12, [0.65, 0.68, 0.72]);               // 盾牌
+      b.ellipse(sx, sy, 8, 10, [0.2, 0.55, 0.32]);
+      b.rect(sx - 1, sy - 8, 2, 16, [0.95, 0.85, 0.4]);
+      b.rect(sx - 6, sy - 2, 12, 2, [0.95, 0.85, 0.4]);
+      b.ellipse(sx - 3, sy - 5, 3, 3, [1, 1, 1], 0.3, 1);
+      b.ring(cx + 15, top + 36, 3, [0.85, 0.7, 0.55], 1, 2);       // OK 手勢
+      b.rect(cx + 17, top + 29, 2, 6, [0.85, 0.7, 0.55]);
+      b.light(sx, sy, 20, th.glow, 0.2);
+    },
+    // 路人：拿著手機、頭上一串「…」對話框
+    civilian(b, rnd, th) {
+      const cx = 32, top = 20;
+      bust(b, rnd, cx, top, { shirt: hsl(rnd() * 360, 0.35, 0.4) });
+      b.rect(cx + 6, top + 36, 8, 12, [0.06, 0.07, 0.1]);
+      b.rect(cx + 7, top + 37, 6, 9, [0.75, 0.8, 0.9]);
+      b.rect(cx + 14, top - 6, 18, 10, [0.95, 0.95, 0.97]);        // 對話框
+      b.line(cx + 16, top + 4, cx + 13, top + 7, [0.95, 0.95, 0.97]);
+      for (let i = 0; i < 3; i++) b.rect(cx + 18 + i * 4, top - 2, 2, 2, [0.3, 0.32, 0.4]);
+      b.light(cx, top + 10, 30, th.glow, 0.12);
+    },
+  };
+
+  function roleCard(role, seed) {
+    const b = new Buf(CW, CH), rnd = rng(`${role}|${seed}`);
+    const th = ROLE_THEME[role] || ROLE_THEME.civilian;
+    b.each((x, y) => { // 背景：中間亮、四周暗，加一點斜紋
+      const q = Math.hypot((x - CW / 2) / CW, (y - CH * 0.42) / CH);
+      const k = 1.35 - q * 1.6 + (((x + y) % 7) === 0 ? 0.05 : 0);
+      return [th.bg[0] * k, th.bg[1] * k, th.bg[2] * k];
+    });
+    b.light(CW / 2, CH * 0.38, 40, th.glow, 0.22);
+    (ROLE_ART[role] || ROLE_ART.civilian)(b, rnd, th);
+    b.rect(6, CH - 20, CW - 12, 13, [0, 0, 0], 0.55);              // 底部名牌（字由 HTML 疊上去）
+    b.rect(6, CH - 20, CW - 12, 1, th.frame, 0.8);
+    cardFrame(b, th.frame);
+    b.vignette(0.35);
+    b.noise(rnd, 0.035);
+    return b.toCanvas(8);
+  }
+
+  // 牌背：深色底、對角格紋、中間雙勾標誌
+  function cardBack() {
+    const b = new Buf(CW, CH), rnd = rng('back');
+    b.each((x, y) => {
+      const grid = ((x + y) % 8 === 0 || (x - y + 200) % 8 === 0) ? 0.07 : 0;
+      return [0.09 + grid, 0.1 + grid, 0.14 + grid * 1.4];
+    });
+    b.ellipse(32, 44, 16, 16, [1, 0.82, 0.25]);
+    b.ellipse(29, 40, 8, 7, [1, 0.95, 0.65], 0.6, 1);
+    const ink = [0.11, 0.09, 0];
+    for (let t = 0; t <= 1; t += 0.05) { // 兩個勾
+      b.rect(Math.round(23 + t * 4), Math.round(44 + t * 4), 2, 2, ink);
+      b.rect(Math.round(27 + t * 8), Math.round(48 - t * 10), 2, 2, ink);
+      b.rect(Math.round(30 + t * 3), Math.round(46 + t * 2), 2, 2, ink);
+      b.rect(Math.round(33 + t * 8), Math.round(48 - t * 10), 2, 2, ink);
+    }
+    b.light(32, 44, 30, [1, 0.8, 0.3], 0.2);
+    cardFrame(b, [0.75, 0.68, 0.45]);
+    b.vignette(0.4);
+    b.noise(rnd, 0.03);
+    return b.toCanvas(8);
+  }
+
   return {
+    roleCard,
+    cardBack,
     evidence(kind, seed) {
       const b = new Buf(), rnd = rng(`${kind}|${seed}`);
       (SCENES[kind] || SCENES.siren)(b, rnd);

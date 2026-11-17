@@ -19,7 +19,7 @@ const T = {
   reveal: num(process.env.T_REVEAL, 0), // 0 = 依回覆數自動計算
 };
 const MIN_PLAYERS = num(process.env.MIN_PLAYERS, 1);
-const BOT_FILL = num(process.env.BOT_FILL, 4); // 真人不足這個數字時，用 AI 路人補滿
+const BOT_FILL = num(process.env.BOT_FILL, 5); // 真人不足這個數字時，用 AI 路人補滿
 const MAX_PLAYERS = 12;
 const MAX_MEMBERS = 30;
 const MAX_ROUNDS = num(process.env.MAX_ROUNDS, 5);
@@ -41,7 +41,8 @@ const shuffle = (a) => {
 };
 
 class Room {
-  constructor(code, ai, locale) {
+  constructor(code, ai, locale, voice) {
+    this.voice = voice || null;
     this.code = code;
     this.ai = ai;
     this.locale = story.LOCALES.includes(locale) ? locale : 'tw';
@@ -187,7 +188,7 @@ class Room {
         done: !!c && ((this.phase === 'ANSWER' && c.replies.has(x.id)) || (this.phase === 'BLAME' && c.blames.has(x.id))),
       })),
       scenario: this.scenario && { title: this.scenario.title, premise: this.scenario.premise,
-        characters: this.scenario.characters.map((ch) => ({ name: ch.name, role: ch.role })) },
+        characters: this.scenario.characters.map((ch) => ({ name: ch.name, role: ch.role, g: /姐|姑|媽|嫲|婆|太|姨|嬸|妹|女|娘|小姐|May|Mandy|Karen|Mimi|Wing|Yan|Kitty|Amy|Ivy|Cindy|Jenny|Lily|Emily|Grace|Bella|Vicky|Fiona|Coco|Jessica/i.test(ch.name) ? 'f' : 'm' })) },
       log: this.log,
       result: this.result,
     };
@@ -198,6 +199,16 @@ class Room {
         role: p.role, roleName: R.roleName[p.role], goal: R.goal[p.role],
         identity: p.identity, backstory: p.backstory, secret: p.secret, hint: p.hint || '',
         canFrame: p.role === 'insider' && !p.framed && !['LOBBY', 'ACCUSE', 'OVER'].includes(this.phase),
+        checks: p.checks || 0,
+        checked: (p.checked || []).map((k) => R.checkResult(k.name, k.yes)),
+        checkedIds: (p.checked || []).map((k) => k.id),
+        checkAsk: p.role === 'witness' ? R.checkAsk(p.checks || 0) : '',
+        canCheck: p.role === 'witness' && p.checks > 0 && !['LOBBY', 'ACCUSE', 'OVER'].includes(this.phase),
+        canGuard: p.role === 'guard' && p.lives > 0 && !!c && ['INTRO', 'ANSWER', 'BLAME'].includes(this.phase),
+        guardAsk: R.guardAsk,
+        guarding: c && c.guarded ? (this.players.get(c.guarded) || {}).name || '' : '',
+        guardOn: c && c.guarded ? R.guardOn((this.players.get(c.guarded) || {}).name || '') : '',
+        lastGuard: p.lastGuard || '',
         framed: ft ? ft.name : '',
       };
     }
@@ -323,6 +334,7 @@ class Room {
     this.sys(this.scenario.premise);
     this.sys(this.L.TXT.cast(this.scenario.characters.map((c) => `${c.name}（${c.role}）`).join('、')));
     if (this.mode === 'vote') this.sys(this.L.TXT.noAI);
+    this.prepareVoice(first);
     await this.dealRoles();
     if (g !== this.gen) return;
     this.beginRound(first);
@@ -350,6 +362,18 @@ class Room {
     this.sys(R.roster(cast.map((p) => `${p.name}（${p.identity}）`).join('、')));
   }
 
+  // 趁公布結果、派身分的空檔，先替下一則角色訊息產生配音（驗證通過才用）。來不及就不配音。
+  prepareVoice(prompt) {
+    this.voiceReady = null;
+    if (!this.voice || !prompt || !this.voice.enabledFor(this.locale)) return;
+    const g = this.gen, text = prompt.message;
+    const mood = this.anger < 30 ? 1 : this.anger < 55 ? 2 : this.anger < 80 ? 3 : 4;
+    this.voice.speak(text, this.locale, prompt.character, mood, 14000).then((r) => {
+      if (r && this.phase !== 'LOBBY') this.voiceReady = { text, url: `/voice/rt/${r.id}.wav` };
+    }).catch(() => {});
+    void g;
+  }
+
   // 內鬼栽贓：一局一次，指定一個人，下一輪會出現對他不利的匿名證據。
   frame(p, targetId) {
     const t = this.players.get(targetId);
@@ -358,6 +382,46 @@ class Room {
     p.framed = true;
     this.pendingFrame = t.id;
     this.broadcast();
+  }
+
+  // 知情者「查手機」：一局兩次，私下得知某人是不是內鬼。
+  check(p, targetId) {
+    const t = this.players.get(targetId);
+    if (p.role !== 'witness' || !(p.checks > 0) || !t || t === p || !t.played) return;
+    if (['LOBBY', 'ACCUSE', 'OVER'].includes(this.phase) || p.checked.some((x) => x.id === t.id)) return;
+    p.checks--;
+    p.checked.push({ id: t.id, name: t.name, yes: t === this.insider });
+    this.broadcast();
+  }
+
+  // 和事佬「勸和」：這一輪保一個活人，他少扣一條命。作答或甩鍋階段都能改。
+  guardPick(p, targetId) {
+    const c = this.current;
+    const t = this.players.get(targetId);
+    if (p.role !== 'guard' || p.lives <= 0 || !c || !t || t === p || t.lives <= 0) return;
+    if (!['INTRO', 'ANSWER', 'BLAME'].includes(this.phase) || t.id === p.lastGuard) return;
+    c.guarded = t.id;
+    this.broadcast();
+  }
+
+  // AI 路人也會用能力，讓單人局也有狼人殺的變數。
+  botAbilities() {
+    const c = this.current;
+    const cast = [...this.players.values()].filter((x) => x.played);
+    for (const b of cast.filter((x) => x.bot)) {
+      const others = cast.filter((x) => x !== b);
+      if (b.role === 'witness' && b.checks > 0 && Math.random() < 0.5) {
+        const fresh = others.filter((x) => !b.checked.some((k) => k.id === x.id));
+        if (fresh.length) this.check(b, story.pick(fresh).id);
+      } else if (b.role === 'guard' && b.lives > 0) {
+        const ok = others.filter((x) => x.lives > 0 && x.id !== b.lastGuard);
+        if (ok.length) this.guardPick(b, story.pick(ok).id);
+      } else if (b.role === 'insider' && !b.framed && this.round >= 2 && Math.random() < 0.5) {
+        const humans = others.filter((x) => !x.bot);
+        if (humans.length) this.frame(b, story.pick(humans).id);
+      }
+    }
+    void c;
   }
 
   // 指證內鬼：所有參賽者（包括亡靈與 AI 路人）各投一票。
@@ -375,6 +439,7 @@ class Room {
       const others = cast.filter((x) => x !== b);
       let target;
       if (b === this.insider) target = others.find((x) => x.id === this.framedId) || story.pick(others);
+      else if (b.role === 'witness' && b.checked.some((k) => k.yes)) target = this.insider;
       else target = Math.random() < 0.35 ? this.insider : story.pick(others);
       setTimeout(() => g === this.gen && this.accuse(b, target.id), T.accuse * (0.15 + Math.random() * 0.35));
     }
@@ -512,8 +577,11 @@ class Room {
       }
     }
     if (c.event) this.log.push({ k: 'event', text: c.event, icon: story.eventEmoji(c.event), kind: story.eventKind(c.event) });
-    this.log.push({ k: 'npc', who: c.character, text: c.message, keyword: c.keyword, kwEmoji: this.L.keywordEmoji(c.keyword), target: c.target });
+    const vo = this.voiceReady && this.voiceReady.text === c.message ? this.voiceReady.url : '';
+    this.voiceReady = null;
+    this.log.push({ k: 'npc', who: c.character, text: c.message, keyword: c.keyword, kwEmoji: this.L.keywordEmoji(c.keyword), target: c.target, voice: vo });
     this.setPhase('ANSWER', T.answer, () => this.closeAnswer());
+    this.botAbilities();
     this.broadcast();
     this.scheduleBots();
   }
@@ -801,10 +869,12 @@ class Room {
     // 每個人這輪要扣幾條命；護盾可以擋掉一條。
     const dmg = new Map();
     const shielded = new Set();
+    let guardedSaved = '';
     for (const id of c.aliveIds) {
       let d = losers.has(id) ? (id === mob ? 2 : 1) : 0;
       const p = this.players.get(id);
       if (d > 0 && p.shield) { p.shield = false; d--; shielded.add(id); }
+      if (d > 0 && id === c.guarded) { d--; guardedSaved = p.name; }
       dmg.set(id, d);
     }
     // 不讓全員同時出局：分數最高的那位保住最後一條命。
@@ -854,6 +924,9 @@ class Room {
     }
     for (const e of entries) { const p = this.players.get(e.pid); p.lastBody = this.bodyOf(e.text, c.keyword); }
     if (mob) this.sys(TXT.mob(this.players.get(mob).name));
+    if (guardedSaved) this.sys(roles.text(this.locale).guarded(guardedSaved));
+    const guard = [...this.players.values()].find((x) => x.role === 'guard');
+    if (guard) guard.lastGuard = c.guarded || '';
 
     // 猜中「誰會扣命」的活人拿到護盾（最多一面）
     const prophets = [];
@@ -882,6 +955,7 @@ class Room {
     if (aiOK && verdict.synopsis) this.synopsis = verdict.synopsis;
     const nb = this.beatFor(this.round + 1, this.alive.length <= 2);
     this.nextPrompt = aiOK && verdict.next ? { ...verdict.next, live: true, event: nb ? nb.event : '' } : this.fallbackPrompt(this.round);
+    this.prepareVoice(this.nextPrompt);
 
     // 真人全滅就結束，不用看電腦互打。
     const over = this.alive.length <= 1 || this.round >= MAX_ROUNDS || !this.alive.some((p) => !p.bot);

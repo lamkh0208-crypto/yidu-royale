@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101418">
+<title>配音室｜藍剔唔覆大逃殺</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="page studio">
+  <p><a href="/">← 返遊戲</a></p>
+  <h1>🎙️ 配音室</h1>
+  <p>喺度錄低角色嘅對白，遊戲入面會用你把聲。㩒「錄音」開始，再㩒一下停。錄完可以試聽、重錄。</p>
+  <ol class="tips">
+    <li>搵個靜啲嘅地方，手機離把口大約一隻手掌。</li>
+    <li>要有戲：嬲就要嬲，串就要串，好似喺 WhatsApp 錄緊語音咁。</li>
+    <li>男聲、女聲兩個版本最好搵唔同人錄；旁白揀一把清楚嘅聲。</li>
+    <li>錄晒之後㩒最底「全部下載」，將啲檔案傳返俾開發者，或者上傳去 GitHub 嘅 <code>public/voice/hk/</code>。</li>
+  </ol>
+  <div class="seg" role="group" aria-label="聲線">
+    <button data-g="m" class="on" type="button">男聲</button>
+    <button data-g="f" type="button">女聲</button>
+    <button data-g="n" type="button">旁白</button>
+  </div>
+  <p id="micErr" class="err" role="alert"></p>
+  <div id="lines" class="lines"></div>
+  <p id="count" class="hint"></p>
+  <button id="dlAll" class="primary" type="button">全部下載</button>
+</main>
+<script src="studio.js"></script>
+</body>
+</html>
