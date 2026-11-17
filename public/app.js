@@ -76,6 +76,65 @@
   const moodOfAnger = (a) => (a < 30 ? 1 : a < 55 ? 2 : a < 80 ? 3 : 4);
   const hueOf = (s) => [...s].reduce((a, c) => (a * 31 + c.codePointAt(0)) % 360, 7);
 
+  // ---------- 介面用字：台灣版與香港版 ----------
+  const UI = {
+    tw: {
+      title: '已讀不回<br>大逃殺', tag: '老闆、前任、親戚同時敲你。<br>回得最爛的那句，扣一條命。',
+      create: '開一間新房間（揪朋友）', solo: '🤖 一個人玩（對戰 AI 路人）', join: '加入房間',
+      read: (n) => `已讀 ${n}`, ghosted: '（已讀不回）',
+      rulesTitle: '怎麼玩', rulesNote: '被評價的永遠是「那句回覆」，不是你本人。玩得開心 👋',
+      rules: [
+        '虛構角色在群組裡逼問你，<b>限時回覆</b>，而且要把指定的<b>怪詞</b>塞進去。',
+        '送出後進入<b>甩鍋</b>：猜哪一句會最慘。猜中拿<b>護盾 🛡️</b>；被最多人指又真的墊底，多扣一條命。',
+        '角色<b>一則一則已讀</b>，表情和怒氣跟著變。<b>最讓他火大</b>的幾句扣命；已讀不回、漏怪詞直接扣。',
+        '每人<b>兩條命</b>，一局<b>五輪</b>。角色記得你說過的話，前後矛盾會被抓包。',
+        '出局變<b>亡靈</b>：寫判定詞決定下一輪怎麼扣命，還能<b>附身</b>活人，逼他多用一個怪詞。',
+        '結局會揭曉真相，扣命最多的人成為<b>背鍋俠</b>。',
+      ],
+      blameAsk: ['🫵 甩鍋時間：', '你猜哪一句會最慘？', '猜中拿護盾 🛡️（不能選自己）'], blameDone: '已經指了，等其他人…',
+      blameHint: '活人猜中有護盾；亡靈也可以指，純粹落井下石。',
+      stuff: (e, k) => `想辦法把 ${e}「${k}」塞進回覆，塞得越妙分數越高。`,
+      haunted: (by, e, k) => `👻 你被 ${by} 附身：還要多用 ${e}「${k}」，沒用到扣 25 分。`,
+      sent: (t) => `已送出：「${t}」，等其他人…`, watching: '活人作答中。',
+      reading: (n) => `${n} 正在已讀大家的回覆…`, reveal: '看看大家回了什麼 👀', ready: '準備好，訊息要來了…',
+      hauntAsk: '👻 附身一個活人（下一輪他要多用一個怪詞）：', hauntOn: '附身中',
+      meta: { blames: (n) => `🫵 ${n} 人甩鍋`, shield: '🛡️ 護盾擋下', mob: '眾望所歸', haunt: '沒用亡靈的怪詞 −25', nokw: '沒有怪詞' },
+      life: (d) => `−${d} 條命`, outTag: '💀 出局', goat: '🍳 本集背鍋俠',
+      shout: { out: '掰掰', rage: '你認真的嗎', win: '太神啦', shield: '有你的' },
+      phase: { LOBBY: '等待開始', INTRO: '對方正在輸入…', ANSWER: '快回訊息！', BLAME: '甩鍋：猜誰最慘', JUDGE: '已讀中…', REVEAL: '公布結果', OVER: '本局結束' },
+    },
+    hk: {
+      title: '藍剔唔覆<br>大逃殺', tag: '老細、前度、親戚一齊搵你。<br>覆得最差嗰句，扣一條命。',
+      create: '開新房（叫埋朋友）', solo: '🤖 自己玩（同 AI 路人鬥）', join: '入房',
+      read: (n) => `藍剔 ${n}`, ghosted: '（藍剔唔覆）',
+      rulesTitle: '點玩', rulesNote: '俾人評嘅永遠係「嗰句回覆」，唔係你本人。玩得開心 👋',
+      rules: [
+        '虛構角色喺 group 入面逼問你，要<b>限時覆</b>，仲要將指定嘅<b>怪詞</b>塞入去。',
+        'Send 咗之後係<b>甩鑊</b>時間：估邊句會最慘。估中攞<b>護盾 🛡️</b>；俾最多人指又真係墊底，扣多一條命。',
+        '角色會<b>逐句藍剔</b>，表情同怒氣跟住變。<b>最激嬲佢</b>嗰幾句扣命；藍剔唔覆、漏咗怪詞即扣。',
+        '每人<b>兩條命</b>，一局<b>五輪</b>。角色記得你講過乜，前言不對後語會俾人捉。',
+        '出局變<b>亡靈</b>：寫判定詞決定下一輪點扣命，仲可以<b>上身</b>，逼活人用多一個怪詞。',
+        '結局會揭曉真相，扣命最多嗰個就係<b>孭鑊俠</b>。',
+      ],
+      blameAsk: ['🫵 甩鑊時間：', '你估邊句會最慘？', '估中攞護盾 🛡️（唔可以揀自己）'], blameDone: '指咗喇，等埋其他人…',
+      blameHint: '活人估中有護盾；亡靈都可以指，純粹落井下石。',
+      stuff: (e, k) => `諗計將 ${e}「${k}」塞入回覆，塞得越妙越高分。`,
+      haunted: (by, e, k) => `👻 你俾 ${by} 上咗身：仲要用埋 ${e}「${k}」，冇用到扣 25 分。`,
+      sent: (t) => `Send 咗：「${t}」，等埋其他人…`, watching: '活人答緊。',
+      reading: (n) => `${n} 逐句藍剔緊大家嘅回覆…`, reveal: '睇吓大家覆咗乜 👀', ready: '準備好，訊息嚟緊…',
+      hauntAsk: '👻 上一個活人身（下一輪佢要用多一個怪詞）：', hauntOn: '上緊身',
+      meta: { blames: (n) => `🫵 ${n} 人甩鑊`, shield: '🛡️ 護盾擋咗', mob: '眾望所歸', haunt: '冇用亡靈個怪詞 −25', nokw: '冇怪詞' },
+      life: (d) => `−${d} 條命`, outTag: '💀 出局', goat: '🍳 今集孭鑊俠',
+      shout: { out: '拜拜喇', rage: '有冇搞錯呀', win: '好嘢', shield: '醒目喎' },
+      phase: { LOBBY: '等開始', INTRO: '對方輸入緊…', ANSWER: '快啲覆！', BLAME: '甩鑊：估邊個最慘', JUDGE: '藍剔緊…', REVEAL: '開估', OVER: '完場' },
+    },
+  };
+  let homeLocale = 'tw';
+  try {
+    homeLocale = localStorage.getItem('yd_locale') || (/^(zh-HK|yue)/i.test(navigator.language || '') ? 'hk' : 'tw');
+  } catch (e) { /* ignore */ }
+  const L = () => UI[(S && S.locale) || homeLocale] || UI.tw;
+
   // ---------- 狀態 ----------
   let ws = null;
   let S = null; // 伺服器送來的最新快照
@@ -173,15 +232,10 @@
     try { localStorage.setItem('yd_name', name); } catch (e) { /* ignore */ }
     store.set('yd_nm', name);
     Sound.init();
-    connect(kind === 'join' ? { t: 'join', code, name } : { t: 'create', name, solo: kind === 'solo' });
+    connect(kind === 'join' ? { t: 'join', code, name } : { t: 'create', name, solo: kind === 'solo', locale: homeLocale });
   }
 
   // ---------- 畫面 ----------
-  const PHASE_LABEL = {
-    LOBBY: '等待開始', INTRO: '對方正在輸入…', ANSWER: '快回訊息！', VOTE: '投票：最想救哪一句？',
-    JUDGE: '判定中…', REVEAL: '公布結果', OVER: '本局結束',
-  };
-
   function onState(m) {
     const prev = S;
     S = m;
@@ -197,7 +251,7 @@
       Sound.setMood(m.phase === 'LOBBY' || m.phase === 'OVER' ? 'lobby' : m.phase === 'ANSWER' ? 'tense' : 'idle');
       if (prev && m.phase === 'ANSWER' && navigator.vibrate) navigator.vibrate(60);
       if (prev && prev.phase === 'LOBBY' && m.phase === 'INTRO') Sound.play('start');
-      if (prev && m.phase === 'VOTE') Sound.play('pop');
+      if (prev && m.phase === 'BLAME') Sound.play('pop');
     }
     render();
     firstSync = false;
@@ -209,12 +263,18 @@
 
   function render() {
     $('btnCode').textContent = S.code;
-    let label = PHASE_LABEL[S.phase];
+    let label = L().phase[S.phase];
     if (S.round && S.phase !== 'OVER' && S.phase !== 'LOBBY') label = `R${S.round}｜${S.criterion ? S.criterion.name : label}`;
     $('phaseLabel').textContent = label;
 
     renderPlayers();
     $('rules').hidden = !(S.phase === 'LOBBY' && !S.log.length);
+    if (!$('rules').hidden && $('rules').dataset.loc !== S.locale) {
+      $('rules').dataset.loc = S.locale;
+      $('rulesTitle').textContent = L().rulesTitle;
+      $('rulesNote').textContent = L().rulesNote;
+      $('rulesList').replaceChildren(...L().rules.map((r) => { const li = document.createElement('li'); li.innerHTML = r; return li; })); // 內容是寫死在程式裡的字串
+    }
 
     // 聊天紀錄（只補新的）
     const log = $('log');
@@ -235,7 +295,7 @@
     if (S.phase === 'ANSWER') {
       const reads = log.querySelectorAll('.read');
       const n = S.players.filter((p) => p.done).length;
-      if (reads.length) reads[reads.length - 1].textContent = n ? `已讀 ${n}` : '';
+      if (reads.length) reads[reads.length - 1].textContent = n ? L().read(n) : '';
     }
 
     if (!queue.length && !qTimer) syncStage();
@@ -298,15 +358,20 @@
     log.append(el);
     if (stick || e.pid === S.you.id) log.scrollTop = log.scrollHeight;
     if (silent) return;
-    if (e.k === 'npc') Sound.play('msg');
+    if (e.k === 'npc') { Sound.play('msg'); Sound.say(e.text, S.locale); }
     else if (e.k === 'reply') {
       // 角色讀到這句回覆：換表情、怒氣值跟著跳
       if (e.mood != null) setStage(e.who, e.mood, shownAnger + MOOD_DELTA[e.mood], true);
       if (e.mood === 4) Sound.play('rage'); else if (e.mood === 0) Sound.play('happy');
+      // 語音：出局喊一句、扣命唸吐槽、沒扣命但暴怒也喊一句
+      if (e.out) Sound.say(L().shout.out, S.locale);
+      else if (e.lost) Sound.say(e.roast, S.locale);
+      else if (e.mood === 4) Sound.say(L().shout.rage, S.locale);
       Sound.play(e.out ? 'out' : e.lost ? 'lost' : 'pop');
       if (e.lost && e.pid === S.you.id && navigator.vibrate) navigator.vibrate([80, 60, 80]);
     } else if (e.k === 'sys') {
-      if (e.text.startsWith('🏆')) Sound.play('win');
+      if (e.text.startsWith('🏆')) { Sound.play('win'); Sound.say(L().shout.win, S.locale); }
+      else if (e.text.startsWith('🛡️')) Sound.say(L().shout.shield, S.locale);
       else if (e.text.startsWith('👻')) Sound.play('ghost');
     }
   }
@@ -323,6 +388,8 @@
         return h('div', { onclick: canKick ? () => confirm(`把「${p.name}」移出房間？`) && send({ t: 'kick', id: p.id }) : null, class: `pl${canKick ? ' kickable' : ''}${p.id === S.you.id ? ' me' : ''}${S.round && !lives ? ' dead' : ''}${p.connected ? '' : ' off'}${hurt ? ' hurt' : ''}` },
           p.host && h('span', { class: 'crown' }, '👑'),
           p.bot && h('span', { class: 'botTag' }, '🤖'),
+          p.shield && lives > 0 && h('span', { class: 'shieldTag' }, '🛡️'),
+          p.haunted && lives > 0 && h('span', { class: 'hauntTag' }, '👻'),
           p.done && h('span', { class: 'done' }, '✓'),
           avatar(p.hue, p.face),
           h('div', { class: 'hp' }, S.round ? (lives ? '♥'.repeat(lives) : '💀') : ''),
@@ -342,6 +409,7 @@
       return h('div', { class: 'endcard' },
         Pixel.poster(e.names || []),
         h('div', { class: 'endBody' }, h('small', {}, `《${e.title}》結局揭曉`), e.text,
+          e.scapegoat && h('div', { class: 'goat' }, h('small', {}, L().goat), e.scapegoat),
           h('div', { class: 'endNames' }, (e.names || []).join('　·　'))));
     }
     if (e.k === 'npc') {
@@ -356,13 +424,16 @@
     const meta = [];
     if (e.mood != null) meta.push(h('span', {}, MOOD_LABEL[e.mood]));
     if (e.score != null) meta.push(h('span', {}, `${e.score} 分`));
-    if (e.votes) meta.push(h('span', {}, `🛟 ${e.votes} 票`));
-    if (e.missing) meta.push(h('span', { class: 'bad' }, '沒有關鍵字'));
-    if (e.lost) meta.push(h('span', { class: 'bad' }, e.out ? '💀 出局' : '−1 條命'));
+    if (e.blames) meta.push(h('span', {}, L().meta.blames(e.blames)));
+    if (e.hauntMiss) meta.push(h('span', { class: 'bad' }, L().meta.haunt));
+    if (e.shielded) meta.push(h('span', { class: 'good' }, L().meta.shield));
+    if (e.mob) meta.push(h('span', { class: 'bad' }, L().meta.mob));
+    if (e.missing) meta.push(h('span', { class: 'bad' }, L().meta.nokw));
+    if (e.lost) meta.push(h('span', { class: 'bad' }, e.out ? L().outTag : L().life(e.dmg || 1)));
     return h('div', { class: `msg reveal${mine ? ' mine' : ''}${e.lost ? ' lost' : ''}` }, avatar(e.hue, e.face),
       h('div', { class: 'body' },
         h('div', { class: 'who' }, e.name),
-        h('div', { class: `bubble${e.ghost ? ' ghost' : ''}` }, e.ghost ? '（已讀不回）' : e.text),
+        h('div', { class: `bubble${e.ghost ? ' ghost' : ''}` }, e.ghost ? L().ghosted : e.text),
         h('div', { class: 'meta' }, meta),
         h('div', { class: 'roast' }, h('small', {}, `${e.who} 回覆：`), e.roast)
       ));
@@ -371,7 +442,7 @@
   function renderDock() {
     const my = me();
     const alive = my.lives > 0;
-    const key = [S.phase, S.round, alive, S.myReply, S.myVote, my.host, JSON.stringify(S.ghost || 0), S.phase === 'LOBBY' ? S.players.filter((p) => p.connected).length : 0].join('|');
+    const key = [S.phase, S.round, alive, S.myReply, S.myBlame, my.host, JSON.stringify(S.ghost || 0), JSON.stringify(S.haunt || 0), S.players.filter((p) => p.lives > 0).map((p) => p.id + (p.haunted ? 'h' : '')).join(','), S.phase === 'LOBBY' ? S.players.filter((p) => p.connected).length : 0].join('|');
     if (key === dockKey) return;
     dockKey = key;
     const dock = $('dock');
@@ -398,7 +469,13 @@
           return h('button', { class: `${blocked ? 'own' : ''}${g.myVote === w.pid ? ' sel' : ''}`, disabled: !g.canVote || blocked,
             onclick: () => { send({ t: 'gvote', pid: w.pid }); Sound.play('vote'); } }, `「${w.text}」— ${w.name}${w.mine ? '（你）' : ''}　${w.votes} 票`);
         })) : null,
-        g.words.length && !g.canVote ? h('p', { class: 'hint' }, '下一題出現、活人作答時開放投票。') : null);
+        g.words.length && !g.canVote ? h('p', { class: 'hint' }, '下一題出現、活人作答時開放投票。') : null,
+        h('p', { class: 'hint' }, L().hauntAsk),
+        h('div', { class: 'chips' }, S.players.filter((p) => p.lives > 0).map((p) => {
+          const mineT = g.haunting === p.id, taken = p.haunted && !mineT;
+          return h('button', { class: mineT ? 'sel' : '', disabled: taken, onclick: () => { send({ t: 'haunt', id: p.id }); Sound.play('ghost'); } },
+            `${mineT ? '👻 ' : ''}${p.name}${mineT ? `（${L().hauntOn}）` : ''}`);
+        })));
     };
 
     if (S.phase === 'LOBBY') {
@@ -421,9 +498,11 @@
       const input = h('input', { maxlength: S.replyMax, placeholder: `回覆要包含「${S.keyword}」`, autocomplete: 'off', enterkeyhint: 'send' });
       const count = h('div', { class: 'count' });
       const upd = () => {
-        const ok = input.value.toLowerCase().includes(S.keyword.toLowerCase());
-        count.textContent = `${ok ? '✓ 有關鍵字' : `還沒出現「${S.keyword}」`}｜${[...input.value].length}/${S.replyMax}`;
-        count.className = `count${ok ? '' : ' bad'}`;
+        const v = input.value.toLowerCase();
+        const need = [S.keyword].concat(S.haunt ? [S.haunt.word] : []);
+        const missing = need.filter((k) => !v.includes(k.toLowerCase()));
+        count.textContent = `${missing.length ? `還沒出現「${missing.join('」「')}」` : '✓ 怪詞都有了'}｜${[...input.value].length}/${S.replyMax}`;
+        count.className = `count${missing.length ? ' bad' : ''}`;
       };
       const submit = () => {
         const text = input.value.trim();
@@ -433,17 +512,20 @@
       input.addEventListener('keydown', (ev) => ev.key === 'Enter' && !ev.isComposing && submit());
       upd();
       fill(dock, 
-        h('p', { class: 'hint' }, `本輪標準：`, h('b', {}, S.criterion.name), `（${S.criterion.desc}）`, h('br'), `想辦法把 ${S.kwEmoji || ''}「${S.keyword}」塞進回覆，塞得越妙分數越高。`),
+        h('p', { class: 'hint' }, `本輪標準：`, h('b', {}, S.criterion.name), `（${S.criterion.desc}）`, h('br'), L().stuff(S.kwEmoji || '', S.keyword),
+          S.haunt && h('span', { class: 'hauntLine' }, h('br'), L().haunted(S.haunt.by, S.haunt.emoji, S.haunt.word))),
         h('div', { class: 'row' }, input, h('button', { onclick: submit }, '送出')), count);
       input.focus();
     } else if (S.phase === 'ANSWER') {
-      fill(dock, h('p', { class: 'hint' }, alive ? `已送出：「${S.myReply}」，等其他人…` : '活人作答中。等等可以投票救人。'), ghostPanel(), emojiBar());
-    } else if (S.phase === 'VOTE') {
-      fill(dock, 
-        h('p', { class: 'hint' }, S.myVote ? '已投票，等其他人…' : h('span', {}, '匿名投票：', h('b', {}, '你最想救哪一句？'), '（不能投自己）')),
-        h('div', { class: 'ballot' }, S.ballot.map((b) =>
-          h('button', { class: `${b.mine ? 'own' : ''}${S.myVote === b.rid ? ' sel' : ''}`, disabled: b.mine || !!S.myVote,
-            onclick: () => { send({ t: 'vote', rid: b.rid }); Sound.play('vote'); } }, b.mine ? `（你的）${b.text}` : b.text))));
+      fill(dock, h('p', { class: 'hint' }, alive ? L().sent(S.myReply) : L().watching), ghostPanel(), emojiBar());
+    } else if (S.phase === 'BLAME') {
+      const ask = L().blameAsk;
+      fill(dock,
+        h('p', { class: 'hint' }, S.myBlame ? L().blameDone : h('span', {}, ask[0], h('b', {}, ask[1]), ask[2])),
+        h('div', { class: 'ballot blame' }, S.ballot.map((b) =>
+          h('button', { class: `${b.mine ? 'own' : ''}${S.myBlame === b.rid ? ' sel' : ''}`, disabled: b.mine || !!S.myBlame,
+            onclick: () => { send({ t: 'blame', rid: b.rid }); Sound.play('vote'); } }, b.mine ? `（你的）${b.text}` : `🫵 ${b.text}`))),
+        h('p', { class: 'hint small' }, L().blameHint));
     } else if (S.phase === 'OVER' && S.result) {
       const r = S.result;
       fill(dock, h('div', { class: 'stack result' },
@@ -457,7 +539,7 @@
         my.host ? h('button', { class: 'primary', onclick: () => send({ t: 'again' }) }, '再來一局') : h('p', {}, '等房主按「再來一局」…')
       ));
     } else {
-      fill(dock, h('p', { class: 'hint' }, S.phase === 'REVEAL' ? '看看大家回了什麼 👀' : S.phase === 'JUDGE' ? `${S.npc || '對方'} 正在已讀大家的回覆…` : '準備好，訊息要來了…'), ghostPanel(), emojiBar());
+      fill(dock, h('p', { class: 'hint' }, S.phase === 'REVEAL' ? L().reveal : S.phase === 'JUDGE' ? L().reading(S.npc || '') : L().ready), ghostPanel(), emojiBar());
     }
   }
 
@@ -466,14 +548,14 @@
     const left = deadline ? Math.max(0, deadline - Date.now()) : 0;
     const clock = $('clock');
     clock.textContent = deadline ? Math.ceil(left / 1000) : '';
-    clock.className = `clock${left < 10000 && (S.phase === 'ANSWER' || S.phase === 'VOTE') ? ' hot' : ''}`;
+    clock.className = `clock${left < 10000 && (S.phase === 'ANSWER' || S.phase === 'BLAME') ? ' hot' : ''}`;
     $('progress').style.width = deadline && S.total ? `${(left / S.total) * 100}%` : '0';
-    const timed = S.phase === 'ANSWER' || S.phase === 'VOTE';
+    const timed = S.phase === 'ANSWER' || S.phase === 'BLAME';
     const sec = Math.ceil(left / 1000);
     if (timed && deadline && sec <= 5 && sec > 0 && sec !== lastTick) {
       lastTick = sec;
       const my = me();
-      if (S.phase === 'VOTE' ? !S.myVote : my.lives > 0 && !S.myReply) Sound.play('tick');
+      if (S.phase === 'BLAME' ? !S.myBlame : my.lives > 0 && !S.myReply) Sound.play('tick');
     }
     if (S.phase === 'ANSWER') Sound.setMood(left < 10000 ? 'panic' : 'tense');
   }
@@ -489,7 +571,7 @@
   async function invite() {
     const url = `${location.origin}/?room=${S.code}`;
     try {
-      if (navigator.share) await navigator.share({ title: '已讀不回大逃殺', text: `來玩！房間碼 ${S.code}`, url });
+      if (navigator.share) await navigator.share({ title: S.title || '已讀不回大逃殺', text: `來玩！房間碼 ${S.code}`, url });
       else {
         await navigator.clipboard.writeText(url);
         toast('邀請連結已複製');
@@ -534,7 +616,7 @@
     ctx.fillStyle = '#ffd23f';
     ctx.fillRect(0, 0, 1080, 16);
     ctx.font = F(44);
-    ctx.fillText('已讀不回大逃殺', 80, 150);
+    ctx.fillText(S.title || '已讀不回大逃殺', 80, 150);
     ctx.fillStyle = '#93a1ad';
     ctx.font = F(36, 500);
     ctx.fillText(`《${S.result.title}》第 ${b.round} 輪`, 80, 210);
@@ -590,16 +672,32 @@
   const qRoom = (new URLSearchParams(location.search).get('room') || '').toUpperCase().slice(0, 4);
   if (qRoom) $('code').value = qRoom;
   $('btnJoin').onclick = () => enter('join');
+  function applyHomeLocale(loc) {
+    homeLocale = loc;
+    try { localStorage.setItem('yd_locale', loc); } catch (e) { /* ignore */ }
+    const u = UI[loc];
+    $('homeTitle').innerHTML = u.title; // 寫死在程式裡的字串
+    $('homeTag').innerHTML = u.tag;
+    $('btnCreate').textContent = u.create;
+    $('btnSolo').textContent = u.solo;
+    $('btnJoin').textContent = u.join;
+    $('locTW').classList.toggle('on', loc === 'tw');
+    $('locHK').classList.toggle('on', loc === 'hk');
+    document.title = u.title.replace('<br>', '');
+  }
+  $('locTW').onclick = () => applyHomeLocale('tw');
+  $('locHK').onclick = () => applyHomeLocale('hk');
+  applyHomeLocale(homeLocale);
   $('btnCreate').onclick = () => enter('create');
   $('btnSolo').onclick = () => enter('solo');
   $('code').addEventListener('keydown', (e) => e.key === 'Enter' && enter('join'));
   $('btnCode').onclick = invite;
-  const SND = ['🔊', '🔔', '🔇'];
+  const SND = ['🔊', '🗣️', '🔔', '🔇'];
   $('btnSound').textContent = SND[Sound.mode];
   $('btnSound').onclick = () => {
     const m = Sound.cycle();
     $('btnSound').textContent = SND[m];
-    toast(['音樂＋音效', '只有音效', '靜音'][m]);
+    toast(['音樂＋音效＋語音', '音效＋語音', '只有音效', '靜音'][m]);
   };
   // 重新整理後自動回房時還沒有點擊過，第一次觸碰畫面再啟動聲音
   document.addEventListener('pointerdown', () => Sound.init(), { once: true });

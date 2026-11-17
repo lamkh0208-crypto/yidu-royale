@@ -7,8 +7,11 @@ const path = require('path');
 const { AI } = require('../src/ai');
 const story = require('../src/story');
 
+// 用法：node tools/gen-scenarios.js [每個種子幾個=3] [地區 tw|hk]
 const PER_SEED = Number(process.argv[2]) || 3;
-const OUT = path.join(__dirname, '..', 'data', 'scenarios.json');
+const LOCALE = process.argv[3] || 'tw';
+const OUT = path.join(__dirname, '..', 'data', LOCALE === 'tw' ? 'scenarios.json' : `scenarios-${LOCALE}.json`);
+const SEEDS = story.pack(LOCALE).SEEDS;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
@@ -21,11 +24,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const good = (seed) => lib.filter((x) => x.seed === seed && hasBeats(x)).length;
 
   for (let round = 0; round < PER_SEED; round++) {
-    for (const seed of story.SEEDS) {
+    for (const seed of SEEDS) {
       if (good(seed) > round) continue; // 這個種子已經夠了（可中斷後續跑）
       try {
         const avoid = lib.filter((x) => x.seed === seed && hasBeats(x)).map((x) => x.title).join('、');
-        const sc = await ai.scenario(avoid ? `${seed}（請寫出和這些不同的角度：${avoid}）` : seed, 30000);
+        const sc = await ai.scenario(avoid ? `${seed}（請寫出和這些不同的角度：${avoid}）` : seed, 30000, LOCALE);
         const ok = sc.characters.length === 3 && sc.first.botReplies.length === 3 && hasBeats(sc) && !titles.has(sc.title);
         if (!ok) { console.log('略過（不完整或重複）：', sc.title, (sc.beats || []).length); continue; }
         // 新的有故事線；同一個種子若還有沒故事線的舊劇本，汰換掉一個。

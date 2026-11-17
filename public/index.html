@@ -20,8 +20,12 @@
 <main id="home" class="screen">
   <div class="home-card">
     <div class="logo" aria-hidden="true"><span class="tick">✓✓</span></div>
-    <h1>已讀不回<br>大逃殺</h1>
-    <p class="tag">老闆、前任、親戚同時敲你。<br>回得最爛的那句，扣一條命。</p>
+    <div class="seg" role="group" aria-label="地區版本">
+      <button id="locTW" type="button">🇹🇼 台灣版</button>
+      <button id="locHK" type="button">🇭🇰 香港版</button>
+    </div>
+    <h1 id="homeTitle">已讀不回<br>大逃殺</h1>
+    <p id="homeTag" class="tag">老闆、前任、親戚同時敲你。<br>回得最爛的那句，扣一條命。</p>
     <label for="name">暱稱</label>
     <input id="name" maxlength="8" autocomplete="off" placeholder="最多 8 個字">
     <div id="joinBox">
@@ -57,15 +61,9 @@
     <div id="angerNum" class="angerNum"></div>
   </section>
   <section id="rules" class="rules" hidden>
-    <h2>怎麼玩</h2>
-    <ol>
-      <li>虛構角色會在群組裡逼問你，<b>限時回覆</b>，而且一定要包含指定的<b>關鍵字</b>。</li>
-      <li>角色會<b>一則一則已讀</b>大家的回覆，表情和怒氣值跟著變，再決定誰最該扣命。（AI 不在時改由大家投票）</li>
-      <li>每輪回得最爛的幾句<b>扣一條命</b>；已讀不回、漏關鍵字直接扣。每人三條命。</li>
-      <li>角色會記得你說過的話。前後矛盾會被抓包。</li>
-      <li>出局變<b>亡靈</b>：寫判定詞、投票決定下一輪怎麼扣命。</li>
-    </ol>
-    <p>被評價的永遠是「那句回覆」，不是你本人。玩得開心 👋</p>
+    <h2 id="rulesTitle">怎麼玩</h2>
+    <ol id="rulesList"></ol>
+    <p id="rulesNote"></p>
   </section>
   <section id="log" class="log" aria-live="polite"></section>
   <div id="typing" class="typing" hidden><span id="typingName"></span> 正在輸入<b>.</b><b>.</b><b>.</b></div>

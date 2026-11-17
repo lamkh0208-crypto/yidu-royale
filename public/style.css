@@ -208,3 +208,20 @@ canvas.px { display: block; width: 100%; height: auto; image-rendering: pixelate
 .endNames { margin-top: 6px; font-size: 12px; color: var(--dim); font-weight: 500; text-align: center; }
 /* 聊天紀錄裡的卡片不可以被壓扁（overflow: hidden 的彈性子項目會被縮到 0） */
 .log > * { flex-shrink: 0; }
+
+/* ---- 第八版：地區切換、甩鍋、護盾、附身、背鍋俠 ---- */
+.seg { display: flex; gap: 6px; background: var(--panel2); padding: 4px; border-radius: 12px; align-self: flex-start; }
+.seg button { background: transparent; padding: 6px 12px; font-size: 14px; border-radius: 9px; color: var(--dim); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.shieldTag { position: absolute; bottom: 24px; right: 0; font-size: 13px; filter: drop-shadow(0 1px 2px #000); }
+.hauntTag { position: absolute; bottom: 24px; left: 0; font-size: 13px; animation: bob 1.2s ease-in-out infinite; }
+.meta .good { color: var(--ok); font-weight: 700; }
+.ballot.blame button { border-color: #5a4a12; }
+.ballot.blame button.sel { border-color: var(--danger); background: #3a1616; }
+.hint.small { font-size: 12px; margin: 6px 0 0; }
+.hauntLine { color: #c9a7ff; font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { background: var(--panel2); border: 1.5px solid var(--line); padding: 6px 10px; font-size: 13px; font-weight: 600; }
+.chips button.sel { border-color: #c9a7ff; background: #2a1f3d; }
+.goat { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: #2a2410; border-left: 4px solid var(--accent); }
+.goat small { margin-bottom: 0; }

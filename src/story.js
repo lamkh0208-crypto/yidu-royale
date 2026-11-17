@@ -261,4 +261,64 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-module.exports = { keywordEmoji, eventEmoji, eventKind, roast, LIBRARY, heuristicScore, BOT_NAMES, BOT_LINES, CRITERIA, FALLBACK_STORIES, SEEDS, KEYWORD_POOL, GENERIC_LINES, ROASTS, pick };
+// 台灣版的介面與系統訊息用字
+const TXT = {
+  title: '已讀不回大逃殺',
+  round: (n, max) => `第 ${n}／${max} 輪`,
+  criterion: { id: 'rage', name: '最讓對方火大', desc: '最讓對方火大的那句扣命' },
+  ghostCriterion: (w) => ({ name: `亡靈判定「${w}」`, desc: `最符合「${w}」的那句扣命` }),
+  ghostPicked: (w, by, n) => `👻 亡靈投票決定下一輪的判定詞：「${w}」（${by} 提出，${n} 票）`,
+  out: (names) => `💀 ${names} 出局，變成亡靈（可以甩鍋、附身、丟表情）`,
+  spectator: (name) => `${name} 進來當觀眾`,
+  noAI: '本局未設定 AI：由規則評分（誠意、具體程度）和大家的甩鍋決定誰扣命。',
+  aiDown: '（AI 斷線中，本輪改用規則評分與甩鍋結果）',
+  cast: (list) => `登場：${list}`,
+  episode: (t) => `📺 本集：《${t}》`,
+  shield: (names) => `🛡️ ${names} 猜中誰最慘，獲得護盾`,
+  mob: (name) => `🫵 眾望所歸：${name} 被最多人甩鍋，而且真的墊底，多扣一條命`,
+  haunt: (by, target, w) => `👻 ${by} 附身了 ${target}：他這輪還要多用「${w}」`,
+  scapegoat: (name) => `最後，所有的鍋都落在 ${name} 頭上。`,
+  winner: (name) => `🏆 ${name} 活到最後！`,
+  needPlayers: (n) => `至少要 ${n} 個人才能開始`,
+  awards: {
+    ghost: ['👻', '已讀王', (n) => `已讀不回 ${n} 次`],
+    rage: ['🤬', '引戰王', (n) => `把對方惹到暴怒 ${n} 次`],
+    safe: ['🛟', '求生慾最強', (n, l) => `${n} 輪只被扣 ${l} 次`],
+    scapegoat: ['🍳', '背鍋俠', (n) => `全場扣命最多（${n} 次）`],
+    prophet: ['🔮', '甩鍋大師', (n) => `猜中誰最慘 ${n} 次`],
+  },
+};
+
+// ---------- 地區內容包：tw（台灣）、hk（香港） ----------
+const hk = require('./story-hk');
+function loadLibrary(file) {
+  try {
+    const all = require(file);
+    const withBeats = all.filter((x) => Array.isArray(x.beats) && x.beats.length >= 5);
+    return withBeats.length >= 8 ? withBeats : all;
+  } catch (e) {
+    return [];
+  }
+}
+function makePack(d, emojiMap, library) {
+  const emoji = (kw) => {
+    if (emojiMap[kw]) return emojiMap[kw];
+    const hit = Object.keys(emojiMap).find((k) => kw.includes(k) || k.includes(kw));
+    return hit ? emojiMap[hit] : '🔑';
+  };
+  const roastFn = (kind, text) => {
+    const pool = d.ROASTS[kind] || d.ROASTS.mid;
+    const q = Array.from(String(text || '')).slice(0, 8).join('');
+    const usable = q ? pool : pool.filter((x) => !x.includes('{q}'));
+    return pick(usable).replace('{q}', q);
+  };
+  return { ...d, LIBRARY: library, keywordEmoji: emoji, roast: roastFn };
+}
+const PACKS = {
+  tw: makePack({ FALLBACK_STORIES, SEEDS, KEYWORD_POOL, GENERIC_LINES, ROASTS, BOT_NAMES, BOT_LINES, heuristicScore, TXT }, KEYWORD_EMOJI, LIBRARY),
+  hk: makePack(hk, { ...KEYWORD_EMOJI, ...hk.KEYWORD_EMOJI }, loadLibrary('../data/scenarios-hk.json')),
+};
+const pack = (locale) => PACKS[locale] || PACKS.tw;
+const LOCALES = Object.keys(PACKS);
+
+module.exports = { pack, LOCALES, keywordEmoji, eventEmoji, eventKind, roast, LIBRARY, heuristicScore, BOT_NAMES, BOT_LINES, CRITERIA, FALLBACK_STORIES, SEEDS, KEYWORD_POOL, GENERIC_LINES, ROASTS, pick };

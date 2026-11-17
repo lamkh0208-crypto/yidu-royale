@@ -1,10 +1,10 @@
 'use strict';
 // 背景音樂與音效：全部用 Web Audio 即時合成，不使用任何外部音檔（沒有版權問題、也不用下載）。
-// 模式：0 = 全開、1 = 只有音效、2 = 靜音。瀏覽器規定要在使用者點擊後才能出聲，所以由第一次點擊啟動。
+// 模式：0 = 全開（音樂＋音效＋語音）、1 = 音效＋語音、2 = 只有音效、3 = 靜音。瀏覽器規定要在使用者點擊後才能出聲，所以由第一次點擊啟動。
 window.Sound = (() => {
   let ctx = null, master, musicBus, sfxBus;
   let mode = 0;
-  try { mode = Number(localStorage.getItem('yd_sound')) || 0; } catch (e) { /* ignore */ }
+  try { mode = Math.min(3, Number(localStorage.getItem('yd_sound')) || 0); } catch (e) { /* ignore */ }
   let mood = 'off'; // off | lobby | idle | tense | panic
   let step = 0, nextTime = 0, timer = null;
   let emo = 1; // 出題角色的情緒：0 心情好、1 普通、2 不爽、3 暴怒
@@ -33,7 +33,7 @@ window.Sound = (() => {
     if (!ctx) return;
     const t = ctx.currentTime;
     musicBus.gain.setTargetAtTime(mode === 0 ? 0.5 : 0, t, 0.15);
-    sfxBus.gain.setTargetAtTime(mode === 2 ? 0 : 0.9, t, 0.05);
+    sfxBus.gain.setTargetAtTime(mode === 3 ? 0 : 0.9, t, 0.05);
   }
 
   // 一個音：頻率、長度、波形、音量、起始時間、滑到的頻率
@@ -141,7 +141,7 @@ window.Sound = (() => {
   return {
     init,
     play(name) {
-      if (!ctx || mode === 2 || !SFX[name] || ctx.state !== 'running') return;
+      if (!ctx || mode === 3 || !SFX[name] || ctx.state !== 'running') return;
       SFX[name](ctx.currentTime + 0.01);
     },
     setMood(m) {
@@ -152,12 +152,30 @@ window.Sound = (() => {
       emo = Math.max(0, Math.min(3, level | 0));
     },
     cycle() {
-      mode = (mode + 1) % 3;
+      mode = (mode + 1) % 4;
+      if (mode > 1 && window.speechSynthesis) window.speechSynthesis.cancel();
       try { localStorage.setItem('yd_sound', String(mode)); } catch (e) { /* ignore */ }
       init();
       applyMode();
       return mode;
     },
     get mode() { return mode; },
+    // 用瀏覽器內建的語音把角色的話唸出來：香港版用粵語，台灣版用國語。裝置沒有對應語音就安靜略過。
+    say(text, locale) {
+      const synth = window.speechSynthesis;
+      if (!synth || mode > 1 || !text) return;
+      const want = locale === 'hk' ? ['zh-HK', 'yue'] : ['zh-TW'];
+      const voices = synth.getVoices();
+      const voice = voices.find((v) => want.some((w) => v.lang.replace('_', '-').startsWith(w)));
+      if (locale === 'hk' && voices.length && !voice) return; // 沒有粵語語音就不要用國語硬唸
+      const u = new SpeechSynthesisUtterance(String(text).replace(/[「」（）()@]/g, ' '));
+      u.lang = locale === 'hk' ? 'zh-HK' : 'zh-TW';
+      if (voice) u.voice = voice;
+      u.rate = 1.15;
+      u.pitch = 0.9;
+      u.volume = 1;
+      synth.cancel();
+      synth.speak(u);
+    },
   };
 })();

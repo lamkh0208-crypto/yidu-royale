@@ -113,7 +113,7 @@ wss.on('connection', (ws, req) => {
         info.creates = info.creates.filter((t) => now - t < 60000);
         if (info.creates.length >= MAX_CREATES_PER_MIN) return send({ t: 'error', msg: '開房太頻繁，等一下再試' });
         info.creates.push(now);
-        target = new Room(newCode(), ai);
+        target = new Room(newCode(), ai, String(m.locale || ''));
         rooms.set(target.code, target);
       } else {
         target = rooms.get(String(m.code || '').toUpperCase().trim());
@@ -129,7 +129,8 @@ wss.on('connection', (ws, req) => {
     if (!room || !player || player.ws !== ws) return;
     if (m.t === 'start') room.start(player, m.topic);
     else if (m.t === 'reply') room.reply(player, m.text);
-    else if (m.t === 'vote') room.vote(player, String(m.rid || ''));
+    else if (m.t === 'blame') room.blame(player, String(m.rid || ''));
+    else if (m.t === 'haunt') room.haunt(player, String(m.id || ''));
     else if (m.t === 'emoji') room.emoji(player, String(m.e || ''));
     else if (m.t === 'word') room.word(player, m.text);
     else if (m.t === 'gvote') room.gvote(player, String(m.pid || ''));
